@@ -30,6 +30,7 @@ from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate, to_absolute_path
 from omegaconf.omegaconf import open_dict
 from pytorch_lightning import loggers as pl_loggers
+from omegaconf import OmegaConf
 
 from open_universe import utils
 
@@ -87,7 +88,12 @@ def main(cfg):
     model = instantiate(cfg.model, _recursive_=False)
 
     # create a logger
-    tb_logger = pl_loggers.TensorBoardLogger(save_dir=".", name="", version="")
+    # tb_logger = pl_loggers.TensorBoardLogger(save_dir=".", name="", version="")
+    wandb_logger = pl_loggers.WandbLogger(
+        project="universe", 
+        name=exp_name, 
+        config=OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)  # Convert safely
+    )
 
     # if a ckpt path is provided, this means we want to resume
     ckpt_path = getattr(cfg, "ckpt_path", None)
@@ -98,7 +104,7 @@ def main(cfg):
 
     # most basic trainer, uses good defaults (auto-tensorboard, checkpoints,
     # logs, and more)
-    trainer = instantiate(cfg.trainer, callbacks=callbacks, logger=tb_logger)
+    trainer = instantiate(cfg.trainer, callbacks=callbacks, logger=wandb_logger)
 
     if cfg.train:
         log.info("start training")
