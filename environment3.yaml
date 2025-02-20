@@ -7,16 +7,16 @@ channels:
 dependencies:
   - "_libgcc_mutex=0.1=conda_forge"
   - "_openmp_mutex=4.5=2_kmp_llvm"
-  - "absl-py=2.1.0=py310h06a4308_0"
+  - "absl-py=2.1.0"
   - "asttokens=2.0.5=pyhd3eb1b0_0"
   - "blas=1.0=mkl"
-  - "bottleneck=1.4.2=py310ha9d4c09_0"
+  - "bottleneck=1.4.2"
   - "brotli-python=1.0.9=py310h6a678d5_9"
   - "bzip2=1.0.8=h5eee18b_6"
   - "c-ares=1.19.1=h5eee18b_0"
   - "ca-certificates=2024.12.31=h06a4308_0"
   - "certifi=2024.12.14=pyhd8ed1ab_0"
-  - "charset-normalizer=3.3.2=pyhd3eb1b0_0"
+  - "charset-normalizer=3.3.2"
   - "comm=0.2.2=pyhd8ed1ab_1"
   - "contourpy=1.3.1=py310hdb19cb5_0"
   - "cuda-cudart=11.7.99=0"
@@ -189,7 +189,7 @@ dependencies:
   - "tornado=6.4.2=py310h5eee18b_0"
   - "traitlets=5.14.3=py310h06a4308_0"
   - "typing_extensions=4.12.2=py310h06a4308_0"
-  - "tzdata=2024b=h04d1e81_0"
+  - "tzdata=2024b"
   - "unicodedata2=15.1.0=py310h5eee18b_1"
   - "urllib3=2.3.0=py310h06a4308_0"
   - "wcwidth=0.2.5=pyhd3eb1b0_0"
@@ -273,7 +273,8 @@ dependencies:
       - nvidia-nvjitlink-cu12==12.4.127
       - nvidia-nvtx-cu12==12.4.127
       - omegaconf==2.3.0
-      - onnxruntime==1.20.1
+      # - onnxruntime==1.20.1
+      - onnxruntime==1.16.3
       - orjson==3.10.15
       - pandas==2.2.3
       - pedalboard==0.9.16
