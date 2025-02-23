@@ -104,6 +104,7 @@ def main(cfg):
 
     # most basic trainer, uses good defaults (auto-tensorboard, checkpoints,
     # logs, and more)
+    print(f"Create trainer with {cfg.trainer}")
     trainer = instantiate(cfg.trainer, callbacks=callbacks, logger=wandb_logger)
 
     if cfg.train:
