@@ -70,7 +70,7 @@ training:
   ema_decay: 0.999
 
 validation:
-  main_loss: val/pesq
+  main_loss: val/score # val/pesq # val/pesq default
   main_loss_mode: max
   n_bins: 5
   max_enh_batches: 4

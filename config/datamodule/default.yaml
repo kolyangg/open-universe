@@ -12,7 +12,7 @@ val:
         pin_memory: true
         num_workers: 4
         shuffle: false
-        batch_size: 1
+        batch_size: 1 # 1 default
 test:
     dataset: vb-test-16k
     dl_opts:

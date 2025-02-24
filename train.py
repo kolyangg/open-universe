@@ -53,6 +53,7 @@ def main(cfg):
 
     # seed all RNGs for deterministic behavior
     pl.seed_everything(cfg.seed)
+    
 
     torch.autograd.set_detect_anomaly(True)
     torch.set_float32_matmul_precision("medium")
@@ -64,12 +65,21 @@ def main(cfg):
     callbacks.append(pl.callbacks.LearningRateMonitor(logging_interval="step"))
     # configure checkpointing to save all models
     # save_top_k == -1  <-- saves all models
+
+    # Ensure directory exists
+    checkpoint_dir = os.path.abspath("checkpoints/universe/exper")
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    
+    print(f"[DEBUG] 🔍 Checkpoints will be saved in: {checkpoint_dir}")
+
+
     val_loss_name = f"{cfg.model.validation.main_loss}"
     loss_name = val_loss_name.split("/")[-1]  # avoid "/" in filenames
     modelcheckpoint_callback = pl.callbacks.ModelCheckpoint(
+        dirpath=checkpoint_dir,  # Explicit directory path
         monitor=val_loss_name,
         save_last=True,
-        save_top_k=-1,
+        save_top_k=1, # -1; 3 = save top-3 on;y
         mode=cfg.model.validation.main_loss_mode,
         filename="".join(["step-{step:08d}_", loss_name, "-{", val_loss_name, ":.4f}"]),
         auto_insert_metric_name=False,
@@ -104,7 +114,6 @@ def main(cfg):
 
     # most basic trainer, uses good defaults (auto-tensorboard, checkpoints,
     # logs, and more)
-    print(f"Create trainer with {cfg.trainer}")
     trainer = instantiate(cfg.trainer, callbacks=callbacks, logger=wandb_logger)
 
     if cfg.train:

@@ -845,7 +845,19 @@ class Universe(pl.LightningModule):
 
 
     def on_validation_epoch_end(self):
-        pass
+        import os
+        print(f"[DEBUG] 🏁 on_train_epoch_end() - Saving checkpoint for epoch {self.current_epoch}")
+        checkpoint_path = f"checkpoints/epoch={self.current_epoch}.ckpt"
+
+        # ✅ Save checkpoint manually
+        self.trainer.save_checkpoint(checkpoint_path)
+        print(f"[DEBUG] ✅ Manually saved checkpoint: {checkpoint_path}")
+
+        # ✅ Check if file exists
+        if os.path.exists(checkpoint_path):
+            print(f"[DEBUG] ✅ Checkpoint exists: {checkpoint_path}")
+        else:
+            print(f"[ERROR] ❌ Checkpoint failed to save: {checkpoint_path}")
 
     def on_test_epoch_start(self):
         self.on_validation_epoch_start()
@@ -990,8 +1002,18 @@ class Universe(pl.LightningModule):
         return self.train(False, no_ema=no_ema)
 
     def on_save_checkpoint(self, checkpoint):
+        import os
         if self.ema is not None:
             checkpoint["ema"] = self.ema.state_dict()
+
+        checkpoint_path = f"checkpoints/epoch={self.current_epoch}.ckpt"
+
+        # ✅ Ensure checkpoint is actually saved
+        if os.path.exists(checkpoint_path):
+            wandb.save(checkpoint_path)
+            print(f"[DEBUG] Checkpoint saved and uploaded to Wandb: {checkpoint_path}")
+        else:
+            print(f"[ERROR] Checkpoint file missing: {checkpoint_path}")
 
     def to(self, *args, **kwargs):
         """Override PyTorch .to() to also transfer the EMA of the model weights"""
