@@ -39,9 +39,10 @@ log = logging.getLogger(__name__)
 
 @hydra.main(config_path="./config", config_name="config")
 def main(cfg):
-    if utils.ddp.is_rank_zero():
-        hydra_conf = HydraConfig().get()
-        exp_name = hydra_conf.run.dir
+    hydra_conf = HydraConfig().get()
+    exp_name = hydra_conf.run.dir
+    
+    if utils.ddp.is_rank_zero():    
         log.info(f"Start experiment: {exp_name}")
     else:
         # when using DDP, if not rank zero, we are already in the run dir
