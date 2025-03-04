@@ -777,7 +777,7 @@ class Universe(pl.LightningModule):
                     if mix_np.ndim == 2:
                         mix_np = mix_np.reshape(-1)  # Convert from (1, samples) to (samples,)
 
-                    print(f"[DEBUG] Input audio shape: {mix_np.shape}, dtype: {mix_np.dtype}, max: {mix_np.max()}, min: {mix_np.min()}")
+                    # print(f"[DEBUG] Input audio shape: {mix_np.shape}, dtype: {mix_np.dtype}, max: {mix_np.max()}, min: {mix_np.min()}")
 
                     # Check for NaNs or Infs before logging
                     if np.isnan(mix_np).any() or np.isinf(mix_np).any():
@@ -819,7 +819,7 @@ class Universe(pl.LightningModule):
                     if est_np.ndim == 2:
                         est_np = est_np.reshape(-1)
 
-                    print(f"[DEBUG] Output audio shape: {est_np.shape}, dtype: {est_np.dtype}, max: {est_np.max()}, min: {est_np.min()}")
+                    # print(f"[DEBUG] Output audio shape: {est_np.shape}, dtype: {est_np.dtype}, max: {est_np.max()}, min: {est_np.min()}")
 
                     if np.isnan(est_np).any() or np.isinf(est_np).any():
                         print(f"[ERROR] Detected NaN or Inf values in output audio: {sample_id}")
@@ -845,19 +845,21 @@ class Universe(pl.LightningModule):
 
 
     def on_validation_epoch_end(self):
-        import os
-        print(f"[DEBUG] 🏁 on_train_epoch_end() - Saving checkpoint for epoch {self.current_epoch}")
-        checkpoint_path = f"checkpoints/epoch={self.current_epoch}.ckpt"
+    # import os
+        # print(f"[DEBUG] 🏁 on_train_epoch_end() - Saving checkpoint for epoch {self.current_epoch}")
+        # checkpoint_path = f"checkpoints/epoch={self.current_epoch}.ckpt"
 
-        # ✅ Save checkpoint manually
-        self.trainer.save_checkpoint(checkpoint_path)
-        print(f"[DEBUG] ✅ Manually saved checkpoint: {checkpoint_path}")
+        # # ✅ Save checkpoint manually
+        # self.trainer.save_checkpoint(checkpoint_path)
+        # print(f"[DEBUG] ✅ Manually saved checkpoint: {checkpoint_path}")
 
-        # ✅ Check if file exists
-        if os.path.exists(checkpoint_path):
-            print(f"[DEBUG] ✅ Checkpoint exists: {checkpoint_path}")
-        else:
-            print(f"[ERROR] ❌ Checkpoint failed to save: {checkpoint_path}")
+        # # ✅ Check if file exists
+        # if os.path.exists(checkpoint_path):
+        #     print(f"[DEBUG] ✅ Checkpoint exists: {checkpoint_path}")
+        # else:
+        #     print(f"[ERROR] ❌ Checkpoint failed to save: {checkpoint_path}")
+        print(f"[DEBUG] ✅ Validation epoch complete")
+
 
     def on_test_epoch_start(self):
         self.on_validation_epoch_start()
@@ -1001,19 +1003,19 @@ class Universe(pl.LightningModule):
     def eval(self, no_ema=False):
         return self.train(False, no_ema=no_ema)
 
-    def on_save_checkpoint(self, checkpoint):
-        import os
-        if self.ema is not None:
-            checkpoint["ema"] = self.ema.state_dict()
+    # def on_save_checkpoint(self, checkpoint):
+    #     import os
+    #     if self.ema is not None:
+    #         checkpoint["ema"] = self.ema.state_dict()
 
-        checkpoint_path = f"checkpoints/epoch={self.current_epoch}.ckpt"
+    #     checkpoint_path = f"checkpoints/epoch={self.current_epoch}.ckpt"
 
-        # ✅ Ensure checkpoint is actually saved
-        if os.path.exists(checkpoint_path):
-            wandb.save(checkpoint_path)
-            print(f"[DEBUG] Checkpoint saved and uploaded to Wandb: {checkpoint_path}")
-        else:
-            print(f"[ERROR] Checkpoint file missing: {checkpoint_path}")
+    #     # ✅ Ensure checkpoint is actually saved
+    #     if os.path.exists(checkpoint_path):
+    #         wandb.save(checkpoint_path)
+    #         print(f"[DEBUG] Checkpoint saved and uploaded to Wandb: {checkpoint_path}")
+    #     else:
+    #         print(f"[ERROR] Checkpoint file missing: {checkpoint_path}")
 
     def to(self, *args, **kwargs):
         """Override PyTorch .to() to also transfer the EMA of the model weights"""
