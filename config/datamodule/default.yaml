@@ -3,21 +3,21 @@ train:
     dataset: vb-train-16k
     dl_opts:
         pin_memory: true
-        num_workers: 6
+        num_workers: 2 # 6
         shuffle: true
-        batch_size: 10  # == 40 with 4 GPUs
+        batch_size: 15  # == 40 with 4 GPUs
 val:
     dataset: vb-val-16k
     dl_opts:
         pin_memory: true
-        num_workers: 4
+        num_workers: 2 # 4
         shuffle: false
         batch_size: 1 # 1 default
 test:
     dataset: vb-test-16k
     dl_opts:
         pin_memory: true
-        num_workers: 4
+        num_workers: 2 # 4
         shuffle: false
         batch_size: 1
 

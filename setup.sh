@@ -23,4 +23,7 @@ echo "Active conda environment: $CONDA_DEFAULT_ENV"
 python -m pip install models/universe
 pip install phonemizer
 
+# conda install -c conda-forge espeak-ng
+# pip install py-espeak-ng
+
 echo "Active conda environment: $CONDA_DEFAULT_ENV"

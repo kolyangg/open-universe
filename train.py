@@ -20,12 +20,17 @@ containing config, checkpoints, and tensorboard logs will be created.
 
 Author: Robin Scheibler (@fakufaku)
 """
+
+print("starting import")
 import logging
 import os
 
 import hydra
+print('imported hydra')
 import pytorch_lightning as pl
+print('imported py lightning')
 import torch
+print('imported torch')
 from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate, to_absolute_path
 from omegaconf.omegaconf import open_dict
@@ -35,6 +40,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 
 print('imported until open_univ')
 from open_universe import utils
+print('imported utils')
 
 log = logging.getLogger(__name__)
 
@@ -85,7 +91,7 @@ def main(cfg):
 
     callbacks = []
     # Use a fancy progress bar
-    callbacks.append(pl.callbacks.RichProgressBar())
+    # callbacks.append(pl.callbacks.RichProgressBar()) # REMOVED
     # Monitor the learning rate
     callbacks.append(pl.callbacks.LearningRateMonitor(logging_interval="step"))
     # configure checkpointing to save all models

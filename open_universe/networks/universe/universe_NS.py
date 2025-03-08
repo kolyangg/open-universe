@@ -1003,10 +1003,10 @@ class Universe(pl.LightningModule):
     def eval(self, no_ema=False):
         return self.train(False, no_ema=no_ema)
 
-    # def on_save_checkpoint(self, checkpoint):
-    #     import os
-    #     if self.ema is not None:
-    #         checkpoint["ema"] = self.ema.state_dict()
+    def on_save_checkpoint(self, checkpoint):
+        import os
+        if self.ema is not None:
+            checkpoint["ema"] = self.ema.state_dict()
 
     #     checkpoint_path = f"checkpoints/epoch={self.current_epoch}.ckpt"
 
