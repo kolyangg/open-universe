@@ -557,6 +557,7 @@ class Universe(pl.LightningModule):
         # mix, target = batch
         batch = batch[:3] # ## NEW WITH TEXT ENCODER ###
         mix, target, text = batch
+        print(f'[DEBUG] Text: {text}') # ## NEW WITH TEXT ENCODER ###
 
         if getattr(self.train_kwargs, "dynamic_mixing", False):
             noise = mix - target

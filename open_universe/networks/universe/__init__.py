@@ -22,4 +22,5 @@ from .lora import UniverseLoRA
 from .mdn import MixtureDensityNetworkLoss
 from .score import ScoreNetwork
 from .universe import Universe
-from .universe_gan import UniverseGAN
+# from .universe_gan import UniverseGAN
+from .universe_gan_NS import UniverseGAN
