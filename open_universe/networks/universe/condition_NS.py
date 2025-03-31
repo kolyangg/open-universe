@@ -359,37 +359,100 @@ class ConditionerNetwork(torch.nn.Module):
         
         ##### NEW TEXT ENCODER #####
 
-    def forward(self, x, x_wav=None, train=False, text = None):
+    # def forward(self, x, x_wav=None, train=False, text = None):
+    #     n_samples = x.shape[-1]
+
+    #     if x_wav is None:
+    #         # this is used in case some type of transform is appled to
+    #         # x before input.
+    #         # This way, we can pass the original waveform
+    #         x_wav = x
+
+    #     x_mel = self.input_mel(x_wav)
+
+    #     ##### NEW TEXT ENCODER #####
+    #     if self.text_encoder is not None and text is not None:
+    #         # If text is a list (or list of lists), convert it to a tensor.
+    #         if isinstance(text, list):
+    #             try:
+    #                 # If it's a list of numbers or list of lists, convert accordingly.
+    #                 # Here we assume text is a list of token indices for each example.
+    #                 # If it's a list of lists:
+    #                 if isinstance(text[0], list):
+    #                     text = [torch.tensor(t, dtype=torch.long) for t in text]
+    #                     # Pad sequences to have the same length if necessary
+    #                     text = torch.nn.utils.rnn.pad_sequence(text, batch_first=True, padding_value=0)
+    #                 else:
+    #                     text = torch.tensor(text, dtype=torch.long)
+    #             except Exception as e:
+    #                 raise ValueError(f"Error converting text to tensor: {e}")
+
+    #             # Ensure the tensor is on the same device as x.
+    #             text = text.to(x.device)
+            
+    #         # Now text is a tensor of shape (B, seq_length)
+    #         text_emb = self.text_encoder(text)  # (B, hidden_dim)
+    #         text_emb = text_emb.unsqueeze(-1)     # (B, hidden_dim, 1)
+    #         text_emb = self.text_proj(text_emb)     # (B, n_mels, 1)
+    #         text_emb = text_emb.expand(-1, -1, x_mel.size(-1))  # (B, n_mels, T)
+    #         x_mel = x_mel + text_emb
+    #         print("[DEBUG] Text features integrated into mel: shape", x_mel.shape)
+    #     ##### NEW TEXT ENCODER #####
+
+    #     if self.precoding:
+    #         x = self.precoding(x)  # do this after mel-spec comp
+
+    #     x = self.input_conv(x)
+    #     h, lengths = self.encoder(x, x_mel)  # latent representation
+
+    #     y_hat, conditions = self.decoder(h, lengths)
+
+    #     if self.output_conv is not None:
+    #         y_hat = self.output_conv(y_hat)
+
+    #     if self.precoding:
+    #         y_hat = self.precoding.inv(y_hat)
+
+    #     # adjust length and dimensions
+    #     y_hat = torch.nn.functional.pad(y_hat, (0, n_samples - y_hat.shape[-1]))
+
+    #     if train:
+    #         return conditions, y_hat, h
+    #     else:
+    #         return conditions
+
+    def forward(self, x, x_wav=None, train=False, text=None):
         n_samples = x.shape[-1]
 
         if x_wav is None:
-            # this is used in case some type of transform is appled to
-            # x before input.
-            # This way, we can pass the original waveform
             x_wav = x
 
         x_mel = self.input_mel(x_wav)
 
         ##### NEW TEXT ENCODER #####
         if self.text_encoder is not None and text is not None:
-            # If text is a list (or list of lists), convert it to a tensor.
-            if isinstance(text, list):
-                try:
-                    # If it's a list of numbers or list of lists, convert accordingly.
-                    # Here we assume text is a list of token indices for each example.
-                    # If it's a list of lists:
-                    if isinstance(text[0], list):
-                        text = [torch.tensor(t, dtype=torch.long) for t in text]
-                        # Pad sequences to have the same length if necessary
-                        text = torch.nn.utils.rnn.pad_sequence(text, batch_first=True, padding_value=0)
-                    else:
-                        text = torch.tensor(text, dtype=torch.long)
-                except Exception as e:
-                    raise ValueError(f"Error converting text to tensor: {e}")
+            # If text is a string, try to convert it to a list of token indices.
+            if isinstance(text, str):
+                tokens = text.split()  # simple whitespace split
+                # Check if a vocabulary mapping is available in the text encoder
+                if hasattr(self.text_encoder, "vocab") and self.text_encoder.vocab is not None:
+                    # Map each token to its index; if token not found, use index 0.
+                    text = [self.text_encoder.vocab.get(token, 0) for token in tokens]
+                else:
+                    raise ValueError("Text input is a string but no vocabulary mapping is provided. "
+                                    "Please pre-tokenize the text before feeding it to the model.")
 
-                # Ensure the tensor is on the same device as x.
-                text = text.to(x.device)
+            # If text is a list of token lists, pad them to the same length
+            if isinstance(text, list):
+                if isinstance(text[0], list):
+                    text = [torch.tensor(t, dtype=torch.long) for t in text]
+                    text = torch.nn.utils.rnn.pad_sequence(text, batch_first=True, padding_value=0)
+                else:
+                    text = torch.tensor(text, dtype=torch.long)
             
+            # Make sure text is on the correct device
+            text = text.to(x.device)
+
             # Now text is a tensor of shape (B, seq_length)
             text_emb = self.text_encoder(text)  # (B, hidden_dim)
             text_emb = text_emb.unsqueeze(-1)     # (B, hidden_dim, 1)
@@ -400,11 +463,10 @@ class ConditionerNetwork(torch.nn.Module):
         ##### NEW TEXT ENCODER #####
 
         if self.precoding:
-            x = self.precoding(x)  # do this after mel-spec comp
+            x = self.precoding(x)
 
         x = self.input_conv(x)
-        h, lengths = self.encoder(x, x_mel)  # latent representation
-
+        h, lengths = self.encoder(x, x_mel)
         y_hat, conditions = self.decoder(h, lengths)
 
         if self.output_conv is not None:
@@ -413,10 +475,10 @@ class ConditionerNetwork(torch.nn.Module):
         if self.precoding:
             y_hat = self.precoding.inv(y_hat)
 
-        # adjust length and dimensions
         y_hat = torch.nn.functional.pad(y_hat, (0, n_samples - y_hat.shape[-1]))
 
         if train:
             return conditions, y_hat, h
         else:
             return conditions
+
