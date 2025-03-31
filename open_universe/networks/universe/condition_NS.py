@@ -345,18 +345,14 @@ class ConditionerNetwork(torch.nn.Module):
         self.precoding = instantiate(precoding, _recursive_=True) if precoding else None
 
         ##### NEW TEXT ENCODER #####
-
-        # Создаём текстовый энкодер, если в конфигурации передан параметр
         if text_encoder_config is not None:
             self.text_encoder = instantiate(text_encoder_config, _recursive_=False)
-            # Проекция текстового вектора в нужное число каналов
             self.text_proj = torch.nn.Conv1d(
                 text_encoder_config.hidden_dim, self.input_mel.mel_spec.n_mels, kernel_size=1
             )
             print("[DEBUG] TextEncoder instantiated:", self.text_encoder)
         else:
             self.text_encoder = None
-        
         ##### NEW TEXT ENCODER #####
 
     # def forward(self, x, x_wav=None, train=False, text = None):
@@ -431,34 +427,14 @@ class ConditionerNetwork(torch.nn.Module):
 
         ##### NEW TEXT ENCODER #####
         if self.text_encoder is not None and text is not None:
-            # If text is a string, try to convert it using the vocabulary if available.
-            if isinstance(text, str):
-                tokens = text.split()  # simple split; you might need a more sophisticated tokenizer
-                if self.text_encoder.vocab is not None:
-                    text = [self.text_encoder.vocab.get(token, 0) for token in tokens]
-                else:
-                    raise ValueError("Text input is a string but no vocabulary mapping is provided. "
-                                    "Please pre-tokenize the text or provide a vocabulary in the text encoder.")
-            
-            # If text is a list (of tokens) then convert it to a tensor.
-            if isinstance(text, list):
-                # If it's a list of lists (batch), pad them.
-                if isinstance(text[0], list):
-                    text = [torch.tensor(t, dtype=torch.long) for t in text]
-                    text = torch.nn.utils.rnn.pad_sequence(text, batch_first=True, padding_value=0)
-                else:
-                    text = torch.tensor(text, dtype=torch.long)
-            
-            text = text.to(x.device)
+            # Pass the text directly to the text encoder.
+            # It can accept a string or a list of strings and will perform tokenization.
             text_emb = self.text_encoder(text)  # (B, hidden_dim)
             text_emb = text_emb.unsqueeze(-1)     # (B, hidden_dim, 1)
             text_emb = self.text_proj(text_emb)     # (B, n_mels, 1)
             text_emb = text_emb.expand(-1, -1, x_mel.size(-1))  # (B, n_mels, T)
             x_mel = x_mel + text_emb
             print("[DEBUG] Text features integrated into mel: shape", x_mel.shape)
-
-
-
         ##### NEW TEXT ENCODER #####
 
         if self.precoding:
