@@ -44,6 +44,10 @@ class TextEncoder(nn.Module):
                 attention_mask = (input_ids != 0).long()
 
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
+        # # debug print
+        # print(f"[DEBUG] BERT output shape: {outputs.last_hidden_state.shape}")
+        # print(f"[DEBUG] Attention mask shape: {attention_mask.shape}")
+        # print(f"[DEBUG] Input IDs shape: {input_ids.shape}")
         # Use the [CLS] token representation (first token) as the summary embedding.
         cls_embedding = outputs.last_hidden_state[:, 0, :]  # shape: (batch_size, hidden_size)
         return self.fc(cls_embedding)  # (batch_size, hidden_dim)
