@@ -356,7 +356,7 @@ class ConditionerNetwork(torch.nn.Module):
                 text_encoder_config.hidden_dim, self.total_channels, kernel_size=1
             )
              # Introduce a learnable scaling factor for the text conditioning signal.
-            self.text_scale = torch.nn.Parameter(torch.tensor(1.0))
+            self.text_scale = torch.nn.Parameter(torch.tensor(0.1)) # 1.0
             # print("[DEBUG] TextEncoder instantiated:", self.text_encoder)
         else:
             self.text_encoder = None
