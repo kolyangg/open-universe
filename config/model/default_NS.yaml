@@ -39,10 +39,11 @@ condition_model:
   use_antialiasing: false
   text_encoder_config:
     _target_: open_universe.networks.universe.TextEncoder ### NEW ###
-    vocab_size: 1000
-    embed_dim: 256
-    hidden_dim: 512
-    num_layers: 1
+    # vocab_size: 1000
+    # embed_dim: 256
+    # hidden_dim: 512
+    # num_layers: 1
+    hidden_dim: 256
 
 diffusion:
   schedule: geometric
