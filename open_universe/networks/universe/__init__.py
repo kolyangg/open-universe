@@ -17,7 +17,7 @@ The UNIVERSE++ and UNIVERSE models
 Author: Robin Scheibler (@fakufaku)
 """
 # from .condition import ConditionerNetwork
-from .condition_NS import ConditionerNetwork ### NEW WITH TEXT ENCODER ###
+from .condition_NS_film import ConditionerNetwork ### NEW WITH TEXT ENCODER ###
 from .lora import UniverseLoRA
 from .mdn import MixtureDensityNetworkLoss
 from .score import ScoreNetwork
