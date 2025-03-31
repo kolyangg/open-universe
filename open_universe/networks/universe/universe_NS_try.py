@@ -758,7 +758,7 @@ class Universe(pl.LightningModule):
                         if target_np.ndim == 2:
                             target_np = target_np.reshape(-1)
 
-                        print(f"[DEBUG] Target audio shape: {target_np.shape}, dtype: {target_np.dtype}, max: {target_np.max()}, min: {target_np.min()}")
+                        # print(f"[DEBUG] Target audio shape: {target_np.shape}, dtype: {target_np.dtype}, max: {target_np.max()}, min: {target_np.min()}")
 
                         if np.isnan(target_np).any() or np.isinf(target_np).any():
                             print(f"[ERROR] Detected NaN or Inf values in target audio: {sample_id}")

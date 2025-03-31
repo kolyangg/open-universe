@@ -315,6 +315,8 @@ class ConditionerNetwork(torch.nn.Module):
 
         total_ds = math.prod(rate_factors)
         total_channels = 2 ** len(rate_factors) * n_channels
+        self.total_channels = total_channels  # store for later use
+
         self.input_mel = MelAdapter(
             n_mels,
             total_channels,
@@ -345,25 +347,28 @@ class ConditionerNetwork(torch.nn.Module):
         self.precoding = instantiate(precoding, _recursive_=True) if precoding else None
 
         ##### NEW TEXT ENCODER #####
-        self.n_mels = n_mels # TEMP
+        # self.n_mels = n_mels # TEMP
         if text_encoder_config is not None:
             self.text_encoder = instantiate(text_encoder_config, _recursive_=False)
-            # Explicitly use self.n_mels for the output channels
+            # Project the text encoder's hidden dimension to match total_channels (e.g., 512)
+           
             self.text_proj = torch.nn.Conv1d(
-                text_encoder_config.hidden_dim, self.n_mels, kernel_size=1
+                text_encoder_config.hidden_dim, self.total_channels, kernel_size=1
             )
-            print("[DEBUG] TextEncoder instantiated:", self.text_encoder)
+            # print("[DEBUG] TextEncoder instantiated:", self.text_encoder)
         else:
             self.text_encoder = None
         ##### NEW TEXT ENCODER #####
 
     def forward(self, x, x_wav=None, train=False, text=None):
+       
         n_samples = x.shape[-1]
 
         if x_wav is None:
             x_wav = x
 
         x_mel = self.input_mel(x_wav)
+
 
         ##### NEW TEXT ENCODER #####
         if self.text_encoder is not None and text is not None:
@@ -374,8 +379,15 @@ class ConditionerNetwork(torch.nn.Module):
             text_emb = text_emb.unsqueeze(-1)     # (B, hidden_dim, 1)
             text_emb = self.text_proj(text_emb)     # (B, n_mels, 1); now n_mels matches self.n_mels (80)
             text_emb = text_emb.expand(-1, -1, x_mel.size(-1))  # (B, n_mels, T)
+
+            # Optionally add an assertion to catch shape mismatches early
+            # Debug: Print shapes of x_mel and text_emb
+            # print(f"Debug: x_mel shape: {x_mel.shape}")
+            # print(f"Debug: text_emb shape: {text_emb.shape}")
+            assert x_mel.shape == text_emb.shape, f"Shape mismatch: x_mel {x_mel.shape} vs text_emb {text_emb.shape}"
+    
             x_mel = x_mel + text_emb
-            print("[DEBUG] Text features integrated into mel: shape", x_mel.shape)
+            # print("[DEBUG] Text features integrated into mel: shape", x_mel.shape)
         ##### NEW TEXT ENCODER #####
 
         if self.precoding:
