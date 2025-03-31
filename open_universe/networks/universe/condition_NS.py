@@ -371,20 +371,32 @@ class ConditionerNetwork(torch.nn.Module):
         x_mel = self.input_mel(x_wav)
 
         ##### NEW TEXT ENCODER #####
-
-        # Если задан текст, обрабатываем его через текстовый энкодер
         if self.text_encoder is not None and text is not None:
-            # text: (B, seq_length)
+            # If text is a list (or list of lists), convert it to a tensor.
+            if isinstance(text, list):
+                try:
+                    # If it's a list of numbers or list of lists, convert accordingly.
+                    # Here we assume text is a list of token indices for each example.
+                    # If it's a list of lists:
+                    if isinstance(text[0], list):
+                        text = [torch.tensor(t, dtype=torch.long) for t in text]
+                        # Pad sequences to have the same length if necessary
+                        text = torch.nn.utils.rnn.pad_sequence(text, batch_first=True, padding_value=0)
+                    else:
+                        text = torch.tensor(text, dtype=torch.long)
+                except Exception as e:
+                    raise ValueError(f"Error converting text to tensor: {e}")
+
+                # Ensure the tensor is on the same device as x.
+                text = text.to(x.device)
+            
+            # Now text is a tensor of shape (B, seq_length)
             text_emb = self.text_encoder(text)  # (B, hidden_dim)
-            # Приводим размерность к (B, C, 1) через unsqueeze и проекцию
-            text_emb = text_emb.unsqueeze(-1)  # (B, hidden_dim, 1)
-            text_emb = self.text_proj(text_emb)  # (B, n_mels, 1)
-            # Расширяем вдоль временной оси до размера x_mel
+            text_emb = text_emb.unsqueeze(-1)     # (B, hidden_dim, 1)
+            text_emb = self.text_proj(text_emb)     # (B, n_mels, 1)
             text_emb = text_emb.expand(-1, -1, x_mel.size(-1))  # (B, n_mels, T)
-            # Объединяем аудио и текст: суммирование (можно также попробовать конкатенацию)
             x_mel = x_mel + text_emb
             print("[DEBUG] Text features integrated into mel: shape", x_mel.shape)
-        
         ##### NEW TEXT ENCODER #####
 
         if self.precoding:
