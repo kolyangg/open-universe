@@ -353,6 +353,7 @@ class ConditionerNetwork(torch.nn.Module):
             self.text_proj = torch.nn.Conv1d(
                 text_encoder_config.hidden_dim, self.input_mel.mel_spec.n_mels, kernel_size=1
             )
+            print("[DEBUG] TextEncoder instantiated:", self.text_encoder)
         else:
             self.text_encoder = None
         
@@ -382,6 +383,7 @@ class ConditionerNetwork(torch.nn.Module):
             text_emb = text_emb.expand(-1, -1, x_mel.size(-1))  # (B, n_mels, T)
             # Объединяем аудио и текст: суммирование (можно также попробовать конкатенацию)
             x_mel = x_mel + text_emb
+            print("[DEBUG] Text features integrated into mel: shape", x_mel.shape)
         
         ##### NEW TEXT ENCODER #####
 
