@@ -355,6 +355,8 @@ class ConditionerNetwork(torch.nn.Module):
             self.text_proj = torch.nn.Conv1d(
                 text_encoder_config.hidden_dim, self.total_channels, kernel_size=1
             )
+             # Introduce a learnable scaling factor for the text conditioning signal.
+            self.text_scale = torch.nn.Parameter(torch.tensor(1.0))
             # print("[DEBUG] TextEncoder instantiated:", self.text_encoder)
         else:
             self.text_encoder = None
@@ -379,6 +381,9 @@ class ConditionerNetwork(torch.nn.Module):
             text_emb = text_emb.unsqueeze(-1)     # (B, hidden_dim, 1)
             text_emb = self.text_proj(text_emb)     # (B, n_mels, 1); now n_mels matches self.n_mels (80)
             text_emb = text_emb.expand(-1, -1, x_mel.size(-1))  # (B, n_mels, T)
+
+            # Scale the text conditioning signal:
+            text_emb = text_emb * self.text_scale
 
             # Optionally add an assertion to catch shape mismatches early
             # Debug: Print shapes of x_mel and text_emb
