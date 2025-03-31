@@ -276,7 +276,7 @@ class ConditionerNetwork(torch.nn.Module):
         fb_kernel_size=3,
         rate_factors=[2, 4, 4, 5],
         n_channels=32,
-        n_mels=80,                      # store desired mel bins here
+        n_mels=80,
         n_mel_oversample=4,
         encoder_gru_residual=False,
         extra_conv_block=False,
@@ -284,15 +284,15 @@ class ConditionerNetwork(torch.nn.Module):
         decoder_act_type="prelu",
         precoding=None,
         input_channels=1,
+        # optional, if specified, an extra conv. layer is used as adapter
+        # for the output signal estimat y_est
         output_channels=None,
         use_weight_norm=False,
         seq_model="gru",
         use_antialiasing=False,
-        text_encoder_config=None,       # new parameter for text encoder
+        text_encoder_config=None,  # новый параметр для текстового энкодера
     ):
         super().__init__()
-        self.n_mels = n_mels  # store n_mels explicitly
-
         self.input_conv = cond_weight_norm(
             torch.nn.Conv1d(
                 input_channels, n_channels, kernel_size=fb_kernel_size, padding="same"
@@ -323,8 +323,7 @@ class ConditionerNetwork(torch.nn.Module):
             use_weight_norm=use_weight_norm,
         )
 
-        self.encoder = instantiate(
-            dict(_target_="open_universe.networks.universe.ConditionerEncoder"),
+        self.encoder = ConditionerEncoder(
             rate_factors,
             n_channels,
             with_gru_residual=encoder_gru_residual,
@@ -332,10 +331,9 @@ class ConditionerNetwork(torch.nn.Module):
             act_type=encoder_act_type,
             use_weight_norm=use_weight_norm,
             seq_model=seq_model,
-            use_antialiasing=use_antialiasing,
+            use_antialiasing=False,
         )
-        self.decoder = instantiate(
-            dict(_target_="open_universe.networks.universe.ConditionerDecoder"),
+        self.decoder = ConditionerDecoder(
             rate_factors[::-1],
             n_channels,
             with_extra_conv_block=extra_conv_block,
