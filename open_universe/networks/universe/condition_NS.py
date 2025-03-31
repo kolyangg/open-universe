@@ -276,7 +276,7 @@ class ConditionerNetwork(torch.nn.Module):
         fb_kernel_size=3,
         rate_factors=[2, 4, 4, 5],
         n_channels=32,
-        n_mels=80,
+        n_mels=80,                      # store desired mel bins here
         n_mel_oversample=4,
         encoder_gru_residual=False,
         extra_conv_block=False,
@@ -284,15 +284,15 @@ class ConditionerNetwork(torch.nn.Module):
         decoder_act_type="prelu",
         precoding=None,
         input_channels=1,
-        # optional, if specified, an extra conv. layer is used as adapter
-        # for the output signal estimat y_est
         output_channels=None,
         use_weight_norm=False,
         seq_model="gru",
         use_antialiasing=False,
-        text_encoder_config=None,  # новый параметр для текстового энкодера
+        text_encoder_config=None,       # new parameter for text encoder
     ):
         super().__init__()
+        self.n_mels = n_mels  # store n_mels explicitly
+
         self.input_conv = cond_weight_norm(
             torch.nn.Conv1d(
                 input_channels, n_channels, kernel_size=fb_kernel_size, padding="same"
@@ -323,7 +323,8 @@ class ConditionerNetwork(torch.nn.Module):
             use_weight_norm=use_weight_norm,
         )
 
-        self.encoder = ConditionerEncoder(
+        self.encoder = instantiate(
+            dict(_target_="open_universe.networks.universe.ConditionerEncoder"),
             rate_factors,
             n_channels,
             with_gru_residual=encoder_gru_residual,
@@ -331,9 +332,10 @@ class ConditionerNetwork(torch.nn.Module):
             act_type=encoder_act_type,
             use_weight_norm=use_weight_norm,
             seq_model=seq_model,
-            use_antialiasing=False,
+            use_antialiasing=use_antialiasing,
         )
-        self.decoder = ConditionerDecoder(
+        self.decoder = instantiate(
+            dict(_target_="open_universe.networks.universe.ConditionerDecoder"),
             rate_factors[::-1],
             n_channels,
             with_extra_conv_block=extra_conv_block,
@@ -347,75 +349,14 @@ class ConditionerNetwork(torch.nn.Module):
         ##### NEW TEXT ENCODER #####
         if text_encoder_config is not None:
             self.text_encoder = instantiate(text_encoder_config, _recursive_=False)
+            # Explicitly use self.n_mels for the output channels
             self.text_proj = torch.nn.Conv1d(
-                text_encoder_config.hidden_dim, self.input_mel.mel_spec.n_mels, kernel_size=1
+                text_encoder_config.hidden_dim, self.n_mels, kernel_size=1
             )
             print("[DEBUG] TextEncoder instantiated:", self.text_encoder)
         else:
             self.text_encoder = None
         ##### NEW TEXT ENCODER #####
-
-    # def forward(self, x, x_wav=None, train=False, text = None):
-    #     n_samples = x.shape[-1]
-
-    #     if x_wav is None:
-    #         # this is used in case some type of transform is appled to
-    #         # x before input.
-    #         # This way, we can pass the original waveform
-    #         x_wav = x
-
-    #     x_mel = self.input_mel(x_wav)
-
-    #     ##### NEW TEXT ENCODER #####
-    #     if self.text_encoder is not None and text is not None:
-    #         # If text is a list (or list of lists), convert it to a tensor.
-    #         if isinstance(text, list):
-    #             try:
-    #                 # If it's a list of numbers or list of lists, convert accordingly.
-    #                 # Here we assume text is a list of token indices for each example.
-    #                 # If it's a list of lists:
-    #                 if isinstance(text[0], list):
-    #                     text = [torch.tensor(t, dtype=torch.long) for t in text]
-    #                     # Pad sequences to have the same length if necessary
-    #                     text = torch.nn.utils.rnn.pad_sequence(text, batch_first=True, padding_value=0)
-    #                 else:
-    #                     text = torch.tensor(text, dtype=torch.long)
-    #             except Exception as e:
-    #                 raise ValueError(f"Error converting text to tensor: {e}")
-
-    #             # Ensure the tensor is on the same device as x.
-    #             text = text.to(x.device)
-            
-    #         # Now text is a tensor of shape (B, seq_length)
-    #         text_emb = self.text_encoder(text)  # (B, hidden_dim)
-    #         text_emb = text_emb.unsqueeze(-1)     # (B, hidden_dim, 1)
-    #         text_emb = self.text_proj(text_emb)     # (B, n_mels, 1)
-    #         text_emb = text_emb.expand(-1, -1, x_mel.size(-1))  # (B, n_mels, T)
-    #         x_mel = x_mel + text_emb
-    #         print("[DEBUG] Text features integrated into mel: shape", x_mel.shape)
-    #     ##### NEW TEXT ENCODER #####
-
-    #     if self.precoding:
-    #         x = self.precoding(x)  # do this after mel-spec comp
-
-    #     x = self.input_conv(x)
-    #     h, lengths = self.encoder(x, x_mel)  # latent representation
-
-    #     y_hat, conditions = self.decoder(h, lengths)
-
-    #     if self.output_conv is not None:
-    #         y_hat = self.output_conv(y_hat)
-
-    #     if self.precoding:
-    #         y_hat = self.precoding.inv(y_hat)
-
-    #     # adjust length and dimensions
-    #     y_hat = torch.nn.functional.pad(y_hat, (0, n_samples - y_hat.shape[-1]))
-
-    #     if train:
-    #         return conditions, y_hat, h
-    #     else:
-    #         return conditions
 
     def forward(self, x, x_wav=None, train=False, text=None):
         n_samples = x.shape[-1]
@@ -428,10 +369,11 @@ class ConditionerNetwork(torch.nn.Module):
         ##### NEW TEXT ENCODER #####
         if self.text_encoder is not None and text is not None:
             # Pass the text directly to the text encoder.
-            # It can accept a string or a list of strings and will perform tokenization.
-            text_emb = self.text_encoder(text)  # (B, hidden_dim)
+            # With the BERT-based TextEncoder, raw text (string or list of strings)
+            # will be tokenized internally.
+            text_emb = self.text_encoder(text)  # expected shape: (B, hidden_dim)
             text_emb = text_emb.unsqueeze(-1)     # (B, hidden_dim, 1)
-            text_emb = self.text_proj(text_emb)     # (B, n_mels, 1)
+            text_emb = self.text_proj(text_emb)     # (B, n_mels, 1); now n_mels matches self.n_mels (80)
             text_emb = text_emb.expand(-1, -1, x_mel.size(-1))  # (B, n_mels, T)
             x_mel = x_mel + text_emb
             print("[DEBUG] Text features integrated into mel: shape", x_mel.shape)
@@ -456,4 +398,3 @@ class ConditionerNetwork(torch.nn.Module):
             return conditions, y_hat, h
         else:
             return conditions
-
