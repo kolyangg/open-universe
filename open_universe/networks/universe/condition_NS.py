@@ -345,6 +345,7 @@ class ConditionerNetwork(torch.nn.Module):
         self.precoding = instantiate(precoding, _recursive_=True) if precoding else None
 
         ##### NEW TEXT ENCODER #####
+        self.n_mels = n_mels # TEMP
         if text_encoder_config is not None:
             self.text_encoder = instantiate(text_encoder_config, _recursive_=False)
             # Explicitly use self.n_mels for the output channels
