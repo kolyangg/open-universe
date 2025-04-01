@@ -348,6 +348,8 @@ class ConditionerNetwork(torch.nn.Module):
 
         ##### NEW TEXT ENCODER #####
         # self.n_mels = n_mels # TEMP
+        text_encoder_config = None # TEMP!!!! 
+
         if text_encoder_config is not None:
             self.text_encoder = instantiate(text_encoder_config, _recursive_=False)
             # Project the text encoder's hidden dimension to match total_channels (e.g., 512)
