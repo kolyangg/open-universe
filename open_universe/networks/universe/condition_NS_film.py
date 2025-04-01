@@ -382,16 +382,18 @@ class ConditionerNetwork(torch.nn.Module):
             text_emb = self.text_encoder(text)
             
             # Apply FiLM fusion: modulate x_mel with text conditions
-            x_mel = self.film(x_mel, text_emb)
+            # x_mel = self.film(x_mel, text_emb)
+            x_mel = x_mel # TEMP
             
             # Debug prints for verification
             # print(f"Debug: x_mel shape after FiLM: {x_mel.shape}")
             # assert x_mel.shape == text_emb.shape, f"Shape mismatch: x_mel {x_mel.shape} vs text_emb {text_emb.shape}"
 
-            print("[DEBUG] Text features integrated into mel: shape", x_mel.shape)
+            # print("[DEBUG] Text features integrated into mel: shape", x_mel.shape)
         ##### NEW TEXT ENCODER #####
-        else:
-            print("[DEBUG] No Text Features in fwd pass")
+        # else:
+            # print("[DEBUG] No Text Features in fwd pass")
+
 
         if self.precoding:
             x = self.precoding(x)

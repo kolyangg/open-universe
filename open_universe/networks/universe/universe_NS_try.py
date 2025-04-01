@@ -84,6 +84,8 @@ class Universe(pl.LightningModule):
         self.val_kwargs = validation
         self.train_kwargs = training
 
+        self.have_text = False # TEMP!!!
+
         # optional EDM loss function from paper
         # Elucidating the Design Space of Diffusion-Based Generative Models
         if edm is not None:
@@ -320,9 +322,16 @@ class Universe(pl.LightningModule):
         #     mix, x_wav=mix_wav, train=True
         # )
 
-        cond, aux_signal, aux_latent = self.condition_model(
-            mix, x_wav=mix_wav, text = text, train=True ## NEW WITH TEXT ENCODER ###
-        )
+        if self.have_text:
+            cond, aux_signal, aux_latent = self.condition_model(
+                mix, x_wav=mix_wav, text = text, train=True ## NEW WITH TEXT ENCODER ###
+            )
+        else:
+            cond, aux_signal, aux_latent = self.condition_model(
+                mix, x_wav=mix_wav, train=True
+            )
+
+
         if use_aux_signal:
             # use the signal conditioner output
             x = self.aux_to_wav(aux_signal)
@@ -507,8 +516,12 @@ class Universe(pl.LightningModule):
         x_t = tgt_trans + sigma[:, None, None] * z
 
         # run computations
-        # cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True)
-        cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, text = text, train=True) # ## NEW WITH TEXT ENCODER ###
+        
+        if self.have_text:
+            cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, text = text, train=True) # ## NEW WITH TEXT ENCODER ###
+        else:
+            cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True)
+
 
         if self.detach_cond:
             cond = [c.detach() for c in cond]
@@ -555,9 +568,13 @@ class Universe(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         # batch = batch[:2]
         # mix, target = batch
-        batch = batch[:3] # ## NEW WITH TEXT ENCODER ###
-        mix, target, text = batch
-        print(f'[DEBUG] Text: {text}') # ## NEW WITH TEXT ENCODER ###
+        if self.have_text:
+            batch = batch[:3] # ## NEW WITH TEXT ENCODER ###
+            mix, target, text = batch
+            print(f'[DEBUG] Text: {text}') # ## NEW WITH TEXT ENCODER ###
+        else:
+            batch = batch[:2]
+            mix, target = batch
 
         if getattr(self.train_kwargs, "dynamic_mixing", False):
             noise = mix - target
@@ -572,9 +589,15 @@ class Universe(pl.LightningModule):
         #     mix, target, train=True, time_sampling=self.train_kwargs.time_sampling
         # )
 
-        loss, l_score, l_signal, l_latent = self.compute_losses(
-            mix, target, train=True, time_sampling=self.train_kwargs.time_sampling, text = text ## NEW WITH TEXT ENCODER ###
-        )
+        if self.have_text:
+            loss, l_score, l_signal, l_latent = self.compute_losses(
+                mix, target, train=True, time_sampling=self.train_kwargs.time_sampling, text = text ## NEW WITH TEXT ENCODER ###
+            )
+        else:
+            loss, l_score, l_signal, l_latent = self.compute_losses(
+                mix, target, train=True, time_sampling=self.train_kwargs.time_sampling
+            )
+
 
         # every 10 steps, we log stuff
         self.log(
@@ -622,34 +645,44 @@ class Universe(pl.LightningModule):
         self.rng.manual_seed(682479040)
 
     def validation_step(self, batch, batch_idx, dataset_i=0):
-        # batch = batch[:2]
 
-        # batch_scaled, *stats = self.normalize_batch(batch, norm=self.normalization_norm)
-        # mix, target = batch_scaled
-        # mix, target, text = batch_scaled 
-        # batch_size = mix.shape[0]
+        if self.have_text:
+            mix_target, *stats = self.normalize_batch(batch[:2], norm=self.normalization_norm)
+            mix, target = mix_target  # unpack normalized mix and target
+            # Get text without normalization
+            text = batch[2]
+            batch_size = mix.shape[0]
+        else:
+            batch = batch[:2]
+            batch_scaled, *stats = self.normalize_batch(batch, norm=self.normalization_norm)
+            mix, target = batch_scaled
+            batch_size = mix.shape[0]
 
-        # ## NEW WITH TEXT ENCODER ###
-        mix_target, *stats = self.normalize_batch(batch[:2], norm=self.normalization_norm)
-        mix, target = mix_target  # unpack normalized mix and target
-        # Get text without normalization
-        text = batch[2]
-        batch_size = mix.shape[0]
-        # ## NEW WITH TEXT ENCODER ###
 
         tb = torch.linspace(0.0, 1.0, self.val_kwargs.n_bins + 1, device=mix.device)
         bin_scores = []
         for i in range(self.val_kwargs.n_bins):
-            ls = self.compute_losses(
-                self.pad(mix)[0],
-                self.pad(target)[0],
-                train=False,
-                time_sampling="time_uniform",  # always sample uniformly for validation
-                t_min=tb[i],
-                t_max=tb[i + 1],
-                rng=self.rng,
-                text = text,  # Pass text to compute_losses ## NEW WITH TEXT ENCODER ###
-            )
+            if self.have_text:
+                ls = self.compute_losses(
+                    self.pad(mix)[0],
+                    self.pad(target)[0],
+                    train=False,
+                    time_sampling="time_uniform",  # always sample uniformly for validation
+                    t_min=tb[i],
+                    t_max=tb[i + 1],
+                    rng=self.rng,
+                    text = text,  # Pass text to compute_losses ## NEW WITH TEXT ENCODER ###
+                )
+            else:
+                ls = self.compute_losses(
+                    self.pad(mix)[0],
+                    self.pad(target)[0],
+                    train=False,
+                    time_sampling="time_uniform",  # always sample uniformly for validation
+                    t_min=tb[i],
+                    t_max=tb[i + 1],
+                    rng=self.rng
+                )
             bin_scores.append(ls)
         self.val_score_bins = tb
         self.val_score_values = torch.tensor(bin_scores, device=mix.device)
@@ -682,8 +715,10 @@ class Universe(pl.LightningModule):
         
         # Validation enhancement losses
         if self.trainer.testing or self.n_batches_est_done < self.val_kwargs.max_enh_batches:
-            # mix, target = batch  # Unnormalized batch
-            mix, target, text = batch  # Unnormalized batch # ## NEW WITH TEXT ENCODER ###
+            if self.have_text:
+                mix, target, text = batch  # Unnormalized batch # ## NEW WITH TEXT ENCODER ###
+            else:
+                mix, target = batch  # Unnormalized batch
             self.n_batches_est_done += 1
             est = self.enhance(mix, rng=self.rng)
 
