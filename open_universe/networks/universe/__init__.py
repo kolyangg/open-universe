@@ -23,6 +23,7 @@ from .mdn import MixtureDensityNetworkLoss
 from .score import ScoreNetwork
 from .universe import Universe
 # from .universe_gan import UniverseGAN
-from .universe_gan_NS import UniverseGAN
+# from .universe_gan_NS import UniverseGAN
+from .universe_gan_NS2 import UniverseGAN
 # from .textencoder_NS import TextEncoder
 from .textencoder_bert import TextEncoder

@@ -183,11 +183,12 @@ class UniverseGAN(Universe):
 
         # For backward compatibility, if there is a special target for the conditioner,
         # one might have an extra element; here we simply set target_original = target_raw.
-        target_original = target_raw
+        
         # print(f'[DEBUG] Text: {text}') # ## NEW WITH TEXT ENCODER ###
 
         if self.have_text:
             # Apply normalization only on the audio tensors.
+            target_original = target_raw
             (mix, target), *stats = self.normalize_batch(
                 (mix_raw, target_raw), norm=self.normalization_norm
             )
