@@ -63,7 +63,7 @@ losses:
     discriminator_channel_mult: 1
   disc_freeze_step: 0
   weights:
-    mel_l1: 60.0 # increased from 45.0 for stronger reconstruction
+    mel_l1: 45.0 #  60.0 # increased from 45.0 for stronger reconstruction
     score: 1.0
   use_signal_decoupling: true
   signal_decoupling_act: snake
@@ -90,7 +90,7 @@ optimizer:
   accumulate_grad_batches: 1
   generator:
     _target_: torch.optim.AdamW
-    lr: 0.0004  # increased generator learning rate from 0.0002
+    lr: 0.0002 # 0.0004  # increased generator learning rate from 0.0002
     weight_decay: 0.01
     betas: [0.8, 0.99]
     weight_decay_exclude: [prelu, bias]
