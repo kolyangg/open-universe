@@ -349,6 +349,7 @@ class ConditionerNetwork(torch.nn.Module):
         ##### NEW TEXT ENCODER #####
         # self.n_mels = n_mels # TEMP
         text_encoder_config = None # TEMP!!!! 
+        self.text_encoder = None
 
         if text_encoder_config is not None:
             self.text_encoder = instantiate(text_encoder_config, _recursive_=False)
@@ -359,9 +360,10 @@ class ConditionerNetwork(torch.nn.Module):
                 feature_channels=self.total_channels
             )
 
-            # print("[DEBUG] TextEncoder instantiated:", self.text_encoder)
+            print("[DEBUG] TextEncoder instantiated:", self.text_encoder)
         else:
             self.text_encoder = None
+            print("[DEBUG] No TextEncoder")
         ##### NEW TEXT ENCODER #####
 
     def forward(self, x, x_wav=None, train=False, text=None):
@@ -386,8 +388,10 @@ class ConditionerNetwork(torch.nn.Module):
             # print(f"Debug: x_mel shape after FiLM: {x_mel.shape}")
             # assert x_mel.shape == text_emb.shape, f"Shape mismatch: x_mel {x_mel.shape} vs text_emb {text_emb.shape}"
 
-            # print("[DEBUG] Text features integrated into mel: shape", x_mel.shape)
+            print("[DEBUG] Text features integrated into mel: shape", x_mel.shape)
         ##### NEW TEXT ENCODER #####
+        else:
+            print("[DEBUG] No Text Features in fwd pass")
 
         if self.precoding:
             x = self.precoding(x)
