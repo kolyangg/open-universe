@@ -64,23 +64,23 @@ def make_st_convs(
             st_convs.append(new_block)
     return st_convs
 
-class CrossAttentionBlock(nn.Module):
+class CrossAttentionBlock(torch.nn.Module):
     def __init__(self, hidden_dim, num_heads=4):
         """
         hidden_dim: dimension of mel/text embeddings
         num_heads: number of attention heads
         """
         super().__init__()
-        self.cross_attn = nn.MultiheadAttention(hidden_dim, num_heads, batch_first=True)
-        self.layer_norm = nn.LayerNorm(hidden_dim)
+        self.cross_attn = torch.nn.MultiheadAttention(hidden_dim, num_heads, batch_first=True)
+        self.layer_norm = torch.nn.LayerNorm(hidden_dim)
         
         # Optional: A small feed-forward network after attention
-        self.ffn = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim * 4),
-            nn.ReLU(),
-            nn.Linear(hidden_dim * 4, hidden_dim),
+        self.ffn = torch.nn.Sequential(
+            torch.nn.Linear(hidden_dim, hidden_dim * 4),
+            torch.nn.ReLU(),
+            torch.nn.Linear(hidden_dim * 4, hidden_dim),
         )
-        self.layer_norm_ffn = nn.LayerNorm(hidden_dim)
+        self.layer_norm_ffn = torch.nn.LayerNorm(hidden_dim)
 
     def forward(self, x, cond, x_mask=None, cond_mask=None):
         """
@@ -334,6 +334,7 @@ class ConditionerNetwork(torch.nn.Module):
         cross_attention_dim=256 # dimension for cross-attn embeddings
     ):
         super().__init__()
+
         self.input_conv = cond_weight_norm(
             torch.nn.Conv1d(
                 input_channels, n_channels, kernel_size=fb_kernel_size, padding="same"
@@ -407,7 +408,11 @@ class ConditionerNetwork(torch.nn.Module):
         #     self.text_encoder = None
         #     print("[DEBUG] No TextEncoder")
 
-         if text_encoder_config is not None:
+         # We'll add two projection layers to convert between self.total_channels and cross_attention_dim
+        self.mel_to_attn = None
+        self.attn_to_mel = None
+
+        if text_encoder_config is not None:
             # 1) Instantiate your text encoder
             self.text_encoder = instantiate(text_encoder_config, _recursive_=False)
             print("[DEBUG] TextEncoder instantiated:", self.text_encoder)
@@ -421,11 +426,17 @@ class ConditionerNetwork(torch.nn.Module):
                 feature_channels=self.total_channels
             )
 
+            # Projection from mel feature dimension to cross-attention dimension
+            self.mel_to_attn = torch.nn.Linear(self.total_channels, cross_attention_dim)
+
             # 3) CrossAttention block for text <-> mel
             self.cross_attention = CrossAttentionBlock(
                 hidden_dim=cross_attention_dim,  # must match your text seq embedding dimension
                 num_heads=4
             )
+
+            # Projection from cross-attention dimension back to mel feature dimension
+            self.attn_to_mel = torch.nn.Linear(cross_attention_dim, self.total_channels)
         else:
             print("[DEBUG] No TextEncoder provided; skipping text conditioning.")
         
@@ -466,20 +477,37 @@ class ConditionerNetwork(torch.nn.Module):
             #   seq_emb: (B, T_text, cross_attention_dim)
             global_emb, seq_emb = self.text_encoder(text)
 
+            # # 2a) FiLM for global conditioning
+            # # We need x_mel in shape (B, T_mel, total_channels)
+            # x_mel_t = x_mel.transpose(1, 2)  # now (B, T_mel, total_channels)
+            # x_mel_t = self.film_global(x_mel_t, global_emb)  # apply FiLM
+            # # shape remains (B, T_mel, total_channels)
+
+            # # 2b) Cross-Attention
+            # # We assume x_mel_t and seq_emb have the same embedding dimension
+            # # x_mel_t: (B, T_mel, cross_attention_dim)
+            # # seq_emb: (B, T_text, cross_attention_dim)
+            # x_mel_t = self.cross_attention(x_mel_t, seq_emb)
+
+            # # transpose back to (B, total_channels, T_mel)
+            # x_mel = x_mel_t.transpose(1, 2)
+
             # 2a) FiLM for global conditioning
-            # We need x_mel in shape (B, T_mel, total_channels)
-            x_mel_t = x_mel.transpose(1, 2)  # now (B, T_mel, total_channels)
-            x_mel_t = self.film_global(x_mel_t, global_emb)  # apply FiLM
-            # shape remains (B, T_mel, total_channels)
+            x_mel_t = x_mel.transpose(1, 2)  # (B, T_mel, total_channels)
+            x_mel_t = self.film_global(x_mel_t, global_emb)  # (B, T_mel, total_channels)
 
-            # 2b) Cross-Attention
-            # We assume x_mel_t and seq_emb have the same embedding dimension
-            # x_mel_t: (B, T_mel, cross_attention_dim)
-            # seq_emb: (B, T_text, cross_attention_dim)
-            x_mel_t = self.cross_attention(x_mel_t, seq_emb)
+            # 2b) Project mel features to cross-attention dimension (e.g., 256)
+            x_mel_attn = self.mel_to_attn(x_mel_t)  # (B, T_mel, cross_attention_dim)
 
-            # transpose back to (B, total_channels, T_mel)
+            # Apply cross-attention: now x_mel_attn and seq_emb are both 256-dim
+            x_mel_attn = self.cross_attention(x_mel_attn, seq_emb)  # (B, T_mel, cross_attention_dim)
+
+            # Project back to original mel feature dimension
+            x_mel_t = self.attn_to_mel(x_mel_attn)  # (B, T_mel, total_channels)
+
+            # Transpose back to (B, total_channels, T_mel)
             x_mel = x_mel_t.transpose(1, 2)
+
 
 
 
@@ -504,20 +532,21 @@ class ConditionerNetwork(torch.nn.Module):
             return conditions
         
 
-class FiLM(torch.nn.Module):
+class FiLM(torch.nn.Module): # updated
     def __init__(self, condition_dim, feature_channels):
         """
-        Args:
-            condition_dim (int): Dimension of the text embedding (from the text encoder).
-            feature_channels (int): Number of channels in the mel features.
+        condition_dim: Dimension of text embedding (from text encoder)
+        feature_channels: Number of channels in the mel features
         """
         super().__init__()
         self.gamma_fc = torch.nn.Linear(condition_dim, feature_channels)
         self.beta_fc = torch.nn.Linear(condition_dim, feature_channels)
 
     def forward(self, x, cond):
-        # x: (B, feature_channels, T)
-        # cond: (B, condition_dim)
-        gamma = self.gamma_fc(cond).unsqueeze(-1)  # (B, feature_channels, 1)
-        beta = self.beta_fc(cond).unsqueeze(-1)      # (B, feature_channels, 1)
+        """
+        x: (B, T_x, feature_channels)   # Mel features (transposed)
+        cond: (B, condition_dim)        # Possibly a single global vector (e.g., speaker/style)
+        """
+        gamma = self.gamma_fc(cond).unsqueeze(1)  # (B, 1, feature_channels)
+        beta = self.beta_fc(cond).unsqueeze(1)    # (B, 1, feature_channels)
         return gamma * x + beta
