@@ -64,6 +64,45 @@ def make_st_convs(
             st_convs.append(new_block)
     return st_convs
 
+class CrossAttentionBlock(nn.Module):
+    def __init__(self, hidden_dim, num_heads=4):
+        """
+        hidden_dim: dimension of mel/text embeddings
+        num_heads: number of attention heads
+        """
+        super().__init__()
+        self.cross_attn = nn.MultiheadAttention(hidden_dim, num_heads, batch_first=True)
+        self.layer_norm = nn.LayerNorm(hidden_dim)
+        
+        # Optional: A small feed-forward network after attention
+        self.ffn = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim * 4),
+            nn.ReLU(),
+            nn.Linear(hidden_dim * 4, hidden_dim),
+        )
+        self.layer_norm_ffn = nn.LayerNorm(hidden_dim)
+
+    def forward(self, x, cond, x_mask=None, cond_mask=None):
+        """
+        x: (B, T_x, hidden_dim)        # e.g. FiLM-modulated mel features
+        cond: (B, T_cond, hidden_dim)  # text embeddings
+        x_mask, cond_mask: optional attention masks
+        """
+        # Cross-attention: query = x, key & value = cond
+        attn_out, _ = self.cross_attn(x, cond, cond, 
+                                      key_padding_mask=cond_mask,
+                                      need_weights=False)
+        x = x + attn_out
+        x = self.layer_norm(x)
+
+        # Optional feed-forward
+        ffn_out = self.ffn(x)
+        x = x + ffn_out
+        x = self.layer_norm_ffn(x)
+
+        return x
+
+
 
 class MelAdapter(torch.nn.Module):
     def __init__(
@@ -291,6 +330,8 @@ class ConditionerNetwork(torch.nn.Module):
         seq_model="gru",
         use_antialiasing=False,
         text_encoder_config=None,  # новый параметр для текстового энкодера
+        film_global_dim=256,    # e.g. dimension for global text embedding
+        cross_attention_dim=256 # dimension for cross-attn embeddings
     ):
         super().__init__()
         self.input_conv = cond_weight_norm(
@@ -352,19 +393,42 @@ class ConditionerNetwork(torch.nn.Module):
         # text_encoder_config = None # TEMP!!!! 
         # self.text_encoder = None
 
-        if text_encoder_config is not None:
-            self.text_encoder = instantiate(text_encoder_config, _recursive_=False)
-            # Project the text encoder's hidden dimension to match total_channels (e.g., 512)
+        # if text_encoder_config is not None:
+        #     self.text_encoder = instantiate(text_encoder_config, _recursive_=False)
+        #     # Project the text encoder's hidden dimension to match total_channels (e.g., 512)
            
-            self.film = FiLM(
-                condition_dim=text_encoder_config.hidden_dim,
+        #     self.film = FiLM(
+        #         condition_dim=text_encoder_config.hidden_dim,
+        #         feature_channels=self.total_channels
+        #     )
+
+        #     print("[DEBUG] TextEncoder instantiated:", self.text_encoder)
+        # else:
+        #     self.text_encoder = None
+        #     print("[DEBUG] No TextEncoder")
+
+         if text_encoder_config is not None:
+            # 1) Instantiate your text encoder
+            self.text_encoder = instantiate(text_encoder_config, _recursive_=False)
+            print("[DEBUG] TextEncoder instantiated:", self.text_encoder)
+
+            # 2) FiLM for global conditioning
+            #    Suppose the text encoder can output two things:
+            #    (a) a global vector (e.g., speaker/style) for FiLM
+            #    (b) a sequence of embeddings for cross-attention
+            self.film_global = FiLM(
+                condition_dim=film_global_dim,
                 feature_channels=self.total_channels
             )
 
-            print("[DEBUG] TextEncoder instantiated:", self.text_encoder)
+            # 3) CrossAttention block for text <-> mel
+            self.cross_attention = CrossAttentionBlock(
+                hidden_dim=cross_attention_dim,  # must match your text seq embedding dimension
+                num_heads=4
+            )
         else:
-            self.text_encoder = None
-            print("[DEBUG] No TextEncoder")
+            print("[DEBUG] No TextEncoder provided; skipping text conditioning.")
+        
         ##### NEW TEXT ENCODER #####
 
     def forward(self, x, x_wav=None, train=False, text=None):
@@ -378,22 +442,45 @@ class ConditionerNetwork(torch.nn.Module):
 
 
         ##### NEW TEXT ENCODER #####
-        if self.text_encoder is not None and text is not None:
-            # Obtain text embedding of shape (B, hidden_dim)
-            text_emb = self.text_encoder(text)
+        # if self.text_encoder is not None and text is not None:
+        #     # Obtain text embedding of shape (B, hidden_dim)
+        #     text_emb = self.text_encoder(text)
             
-            # Apply FiLM fusion: modulate x_mel with text conditions
-            x_mel = self.film(x_mel, text_emb)
-            # x_mel = x_mel # TEMP
+        #     # Apply FiLM fusion: modulate x_mel with text conditions
+        #     x_mel = self.film(x_mel, text_emb)
+        #     # x_mel = x_mel # TEMP
             
-            # Debug prints for verification
-            # print(f"Debug: x_mel shape after FiLM: {x_mel.shape}")
-            # assert x_mel.shape == text_emb.shape, f"Shape mismatch: x_mel {x_mel.shape} vs text_emb {text_emb.shape}"
+        #     # Debug prints for verification
+        #     # print(f"Debug: x_mel shape after FiLM: {x_mel.shape}")
+        #     # assert x_mel.shape == text_emb.shape, f"Shape mismatch: x_mel {x_mel.shape} vs text_emb {text_emb.shape}"
 
-            # print("[DEBUG] Text features integrated into mel: shape", x_mel.shape)
-        ##### NEW TEXT ENCODER #####
-        # else:
-            # print("[DEBUG] No Text Features in fwd pass")
+        #     # print("[DEBUG] Text features integrated into mel: shape", x_mel.shape)
+        # ##### NEW TEXT ENCODER #####
+        # # else:
+        #     # print("[DEBUG] No Text Features in fwd pass")
+
+        ### NEW VERSION WITH CROSS ATTENTION ###
+        if self.text_encoder is not None and text is not None:
+            # Example: text_encoder outputs (global_emb, seq_emb)
+            #   global_emb: (B, film_global_dim)
+            #   seq_emb: (B, T_text, cross_attention_dim)
+            global_emb, seq_emb = self.text_encoder(text)
+
+            # 2a) FiLM for global conditioning
+            # We need x_mel in shape (B, T_mel, total_channels)
+            x_mel_t = x_mel.transpose(1, 2)  # now (B, T_mel, total_channels)
+            x_mel_t = self.film_global(x_mel_t, global_emb)  # apply FiLM
+            # shape remains (B, T_mel, total_channels)
+
+            # 2b) Cross-Attention
+            # We assume x_mel_t and seq_emb have the same embedding dimension
+            # x_mel_t: (B, T_mel, cross_attention_dim)
+            # seq_emb: (B, T_text, cross_attention_dim)
+            x_mel_t = self.cross_attention(x_mel_t, seq_emb)
+
+            # transpose back to (B, total_channels, T_mel)
+            x_mel = x_mel_t.transpose(1, 2)
+
 
 
         if self.precoding:

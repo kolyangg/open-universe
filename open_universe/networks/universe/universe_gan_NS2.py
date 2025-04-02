@@ -90,13 +90,13 @@ class UniverseGAN(Universe):
             optimizer,
             scheduler,
             grad_clipper,
-            transform=transform,
+            transform=None, # as in old version
             normalization_kwargs=normalization_kwargs,
             detach_cond=detach_cond,
             edm=edm,
         )
 
-        self.have_text = False # TEMP
+        self.have_text = True # False # TEMP
 
         # For GAN training, we disable automatic optimization.
         self.automatic_optimization = False
@@ -164,6 +164,7 @@ class UniverseGAN(Universe):
         if self.have_text:        
             batch = batch[:3]
             mix_raw, target_raw, text = batch
+            target_original = target_raw
         else:
             batch = batch[:2]
             mix, target = batch
@@ -172,7 +173,10 @@ class UniverseGAN(Universe):
             # in this case we have a special target for the conditioner network
             target_original = batch[2]
         else:
-            target_original = target
+            if self.have_text: 
+                target_original = target_raw
+            else:
+                target_original = target
 
         if getattr(self.train_kwargs, "dynamic_mixing", False):
             noise = mix - target
@@ -257,6 +261,8 @@ class UniverseGAN(Universe):
                 self.loss_mrd.parameters(), self.grad_clip_vals.mrd
             )
             opt_disc.step()
+            if has_schedulers:
+                self.step_schedulers(sch_score, sch_disc)
         else:
             grad_norm_mpd = 0.0
             grad_norm_mrd = 0.0
@@ -326,6 +332,8 @@ class UniverseGAN(Universe):
         opt_score.step()
         if self.ema is not None:
             self.ema.update(self.model_parameters())
+        if has_schedulers:
+            self.step_schedulers(sch_score, sch_disc)
 
         # Log various losses and gradient norms.
         self.log(
@@ -436,7 +444,7 @@ class UniverseGAN(Universe):
 
         # Optimizer for discriminators.
         params_disc = list(self.loss_mrd.parameters()) + list(
-            self.loss_mpd.parameters()
+            self.loss_mrd.parameters() ## TO CHECK - maybe mpd parameters second
         )
         optimizer_disc = instantiate(
             self.opt_kwargs.discriminator, params=params_disc, _recursive_=False

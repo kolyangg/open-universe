@@ -84,7 +84,7 @@ class Universe(pl.LightningModule):
         self.val_kwargs = validation
         self.train_kwargs = training
 
-        self.have_text = False # TEMP!!!
+        self.have_text = True # False # TEMP!!!
 
         # optional EDM loss function from paper
         # Elucidating the Design Space of Diffusion-Based Generative Models
