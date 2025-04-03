@@ -43,4 +43,5 @@ from .universe_gan_NS2 import UniverseGAN
 # from .textencoder_NS import TextEncoder
 # from .textencoder_bert import TextEncoder
 # from .textencoder_bert_ca import TextEncoder
-from .textencoder_plbert import TextEncoder
+# from .textencoder_plbert import TextEncoder
+from .textencoder_plbert_op import TextEncoder
