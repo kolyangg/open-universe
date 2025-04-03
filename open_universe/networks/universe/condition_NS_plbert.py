@@ -287,6 +287,9 @@ class CrossAttentionBlock(torch.nn.Module):
         self.layer_norm_ffn = torch.nn.LayerNorm(hidden_dim)
 
     def forward(self, x, cond, x_mask=None, cond_mask=None):
+
+        text_metrics = {} # for wandb logging
+
         attn_out, attn_weights = self.cross_attn(x, cond, cond, 
                                       key_padding_mask=cond_mask,
                                       need_weights=True)
@@ -297,6 +300,12 @@ class CrossAttentionBlock(torch.nn.Module):
         print(f"[DEBUG] Attention weights stats: min={attn_weights.min().item()}, " 
             f"max={attn_weights.max().item()}, mean={attn_weights.mean().item()}")
         
+        text_metrics["attention_focus"] = max_attentions.mean().item()
+        text_metrics["attention_min"] = attn_weights.min().item()
+        text_metrics["attention_max"] = attn_weights.max().item()
+        text_metrics["attention_mean"] = attn_weights.mean().item()
+
+        
         # After computing attention weights
         batch_size = attn_weights.shape[0]
         if batch_size > 0:  # Check to avoid empty batch issues
@@ -305,6 +314,7 @@ class CrossAttentionBlock(torch.nn.Module):
             top_k = min(5, attn_sample.shape[-1])
             _, top_indices = torch.topk(attn_sample.mean(dim=0), top_k)
             print(f"[DEBUG] Top {top_k} attended positions: {top_indices.tolist()}")
+            text_metrics["top_attended_positions"] = top_indices.tolist()
                 
         
         x = x + attn_out
@@ -312,7 +322,8 @@ class CrossAttentionBlock(torch.nn.Module):
         ffn_out = self.ffn(x)
         x = x + ffn_out
         x = self.layer_norm_ffn(x)
-        return x
+
+        return x, text_metrics
 
 class FiLM(torch.nn.Module):
     def __init__(self, condition_dim, feature_channels, init_scale=0.1):
@@ -328,6 +339,8 @@ class FiLM(torch.nn.Module):
         self.scale = torch.nn.Parameter(torch.tensor(init_scale))
 
     def forward(self, x, cond):
+        text_metrics = {} # for wandb logging
+
         gamma = self.gamma_fc(cond).unsqueeze(1)  # (B, 1, feature_channels)
         beta = self.beta_fc(cond).unsqueeze(1)    # (B, 1, feature_channels)
         
@@ -339,8 +352,16 @@ class FiLM(torch.nn.Module):
         result = self.scale * (gamma * x + beta)
         print(f"[DEBUG] FiLM input magnitude: {x.abs().mean().item():.4f}")
         print(f"[DEBUG] FiLM output magnitude: {result.abs().mean().item():.4f}")
+
+        # wandb logging
+        text_metrics["film_gamma_min"] = gamma.min().item()
+        text_metrics["film_gamma_max"] = gamma.max().item()
+        text_metrics["film_beta_min"] = beta.min().item()
+        text_metrics["film_beta_max"] = beta.max().item()
+        text_metrics["film_input_magnitude"] = x.abs().mean().item()
+        text_metrics["film_output_magnitude"] = result.abs().mean().item()
         
-        return result
+        return result, text_metrics
 
 class ConditionerNetwork(torch.nn.Module):
     def __init__(
@@ -448,6 +469,9 @@ class ConditionerNetwork(torch.nn.Module):
             print("[DEBUG] No TextEncoder provided; skipping text conditioning.")
 
     def forward(self, x, x_wav=None, train=False, text=None):
+
+        text_metrics = {} # for wandb logging
+
         n_samples = x.shape[-1]
         if x_wav is None:
             x_wav = x
@@ -472,15 +496,25 @@ class ConditionerNetwork(torch.nn.Module):
                     f"mean={global_emb.mean().item()}, std={global_emb.std().item()}")
                 print(f"[DEBUG] Sequence embedding shape: {seq_emb.shape}")
 
+                # log for wandb
+                text_metrics["global_emb_min"] = global_emb.min().item()
+                text_metrics["global_emb_max"] = global_emb.max().item()
+                text_metrics["global_emb_mean"] = global_emb.mean().item()
+                text_metrics["global_emb_std"] = global_emb.std().item()
+
                 # FiLM modulation:
                 x_mel_t = x_mel.transpose(1, 2)  # (B, T_mel, total_channels)
-                x_mel_t = self.film_global(x_mel_t, global_emb)  # still (B, T_mel, total_channels)
+                # x_mel_t = self.film_global(x_mel_t, global_emb)  # still (B, T_mel, total_channels)
+                x_mel_t, film_metrics = self.film_global(x_mel_t, global_emb)  # still (B, T_mel, total_channels)
+                text_metrics.update(film_metrics)  # Merge metrics dictionaries
 
                 # Project mel features to cross-attention dimension:
                 x_mel_attn = self.mel_to_attn(x_mel_t)  # (B, T_mel, cross_attention_dim)
 
                 # Apply cross-attention: queries are mel features, keys/values are sequence text embeddings.
-                x_mel_attn = self.cross_attention(x_mel_attn, seq_emb)  # (B, T_mel, cross_attention_dim)
+                # x_mel_attn = self.cross_attention(x_mel_attn, seq_emb)  # (B, T_mel, cross_attention_dim)
+                x_mel_attn, attn_metrics = self.cross_attention(x_mel_attn, seq_emb)
+                text_metrics.update(attn_metrics)  # Merge metrics dictionaries
 
                 # Project back to original mel dimension:
                 x_mel_t = self.attn_to_mel(x_mel_attn)  # (B, T_mel, total_channels)
@@ -513,6 +547,14 @@ class ConditionerNetwork(torch.nn.Module):
                 print(f"[DEBUG] Text impact factor: {self.text_impact_factor.item()}")
                 print(f"[DEBUG] After blending and normalization - Mel features magnitude: {x_mel.abs().mean().item()}")
                 print(f"[DEBUG] Feature difference magnitude: {(x_mel - x_mel_orig).abs().mean().item()}")
+
+                # Feature metrics
+                text_metrics["mel_features_before"] = x_mel_orig.abs().mean().item()
+                text_metrics["mel_features_conditioned"] = x_mel_conditioned.abs().mean().item()
+                text_metrics["blend_factor"] = blend_factor.item()
+                text_metrics["text_impact_factor"] = self.text_impact_factor.item()
+                text_metrics["mel_features_after"] = x_mel.abs().mean().item()
+                text_metrics["feature_difference"] = (x_mel - x_mel_orig).abs().mean().item()
                 
 
         if self.precoding:
@@ -530,6 +572,6 @@ class ConditionerNetwork(torch.nn.Module):
         y_hat = torch.nn.functional.pad(y_hat, (0, n_samples - y_hat.shape[-1]))
 
         if train:
-            return conditions, y_hat, h
+            return conditions, y_hat, h, text_metrics
         else:
-            return conditions
+            return conditions if not self.text_encoder or text is None else (conditions, text_metrics)

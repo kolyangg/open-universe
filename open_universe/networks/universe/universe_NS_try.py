@@ -322,11 +322,37 @@ class Universe(pl.LightningModule):
         #     mix, x_wav=mix_wav, train=True
         # )
 
+        # if self.have_text:
+        #     cond, aux_signal, aux_latent = self.condition_model(
+        #         mix, x_wav=mix_wav, text = text, train=True ## NEW WITH TEXT ENCODER ###
+        #     )
+        # else:
+        #     cond, aux_signal, aux_latent = self.condition_model(
+        #         mix, x_wav=mix_wav, train=True
+        #     )
+
+        # In enhance method, add debug prints
         if self.have_text:
-            cond, aux_signal, aux_latent = self.condition_model(
-                mix, x_wav=mix_wav, text = text, train=True ## NEW WITH TEXT ENCODER ###
-            )
+            if hasattr(self, 'trainer') and not self.training:
+                print(f"[VALIDATION DEBUG] Using text in enhance: text sample={text[0] if text is not None else 'None'}")
+                
+            # cond, aux_signal, aux_latent = self.condition_model(
+            #     mix, x_wav=mix_wav, text=text, train=True  # NEW WITH TEXT ENCODER
+            # )
+
+            # Updated to handle the text_metrics
+            result = self.condition_model(mix, x_wav=mix_wav, text=text, train=True)
+            if isinstance(result, tuple) and len(result) > 3:  # Includes text_metrics
+                cond, aux_signal, aux_latent, _ = result  # Ignore text_metrics here
+            else:
+                cond, aux_signal, aux_latent = result
+                    
+            if hasattr(self, 'trainer') and not self.training:
+                print(f"[VALIDATION DEBUG] After condition_model call with text")
         else:
+            if hasattr(self, 'trainer') and not self.training:
+                print(f"[VALIDATION DEBUG] Not using text in enhance")
+                
             cond, aux_signal, aux_latent = self.condition_model(
                 mix, x_wav=mix_wav, train=True
             )
@@ -518,9 +544,19 @@ class Universe(pl.LightningModule):
         # run computations
         
         if self.have_text:
-            cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, text = text, train=True) # ## NEW WITH TEXT ENCODER ###
+            # THIS LINE CHANGES - Store the result which now includes text_metrics
+            result = self.condition_model(mix_trans, x_wav=mix, text=text, train=True)
+            if len(result) == 4:  # With text metrics
+                cond, y_est, h_est, text_metrics = result
+                # Store metrics for later use in training_step
+                self.text_metrics = text_metrics
+            else:
+                cond, y_est, h_est = result
+                self.text_metrics = {}
         else:
             cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True)
+            self.text_metrics = {}
+
 
 
         if self.detach_cond:
@@ -622,6 +658,17 @@ class Universe(pl.LightningModule):
         self.log("train/signal", l_signal, **kwargs)
         self.log("train/latent", l_latent, **kwargs)
 
+
+        # ADD THIS SECTION FOR TEXT METRICS LOGGING
+        if self.have_text and hasattr(self, 'text_metrics') and self.text_metrics:
+            for k, v in self.text_metrics.items():
+                if isinstance(v, (int, float)):
+                    self.log(f"text_checks/{k}", v, **kwargs)
+                elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
+                    # For top attended positions
+                    for i, pos in enumerate(v):
+                        self.log(f"text_checks/top_attended_{i}", pos, **kwargs)
+
         self.do_lr_warmup()
 
         return loss
@@ -720,7 +767,26 @@ class Universe(pl.LightningModule):
             else:
                 mix, target = batch  # Unnormalized batch
             self.n_batches_est_done += 1
-            est = self.enhance(mix, rng=self.rng)
+
+            # THIS IS THE KEY FIX - pass text to enhance method when using text features
+            if self.have_text:
+                print(f"[VALIDATION DEBUG] Before enhance call, text available: {text is not None}")
+                print(f"[VALIDATION DEBUG] Text sample: {text[0] if text is not None else 'None'}")
+                est = self.enhance(mix, rng=self.rng, text=text)
+            else:
+                print(f"[VALIDATION DEBUG] Before enhance call, not using text")
+                est = self.enhance(mix, rng=self.rng)
+
+            
+            # Log validation text metrics
+            if self.have_text and hasattr(self, 'text_metrics') and self.text_metrics:
+                for k, v in self.text_metrics.items():
+                    if isinstance(v, (int, float)):
+                        self.log(f"val_text_checks/{k}", v, on_epoch=True, sync_dist=True, batch_size=batch_size)
+                    elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
+                        for i, pos in enumerate(v):
+                            self.log(f"val_text_checks/top_attended_{i}", pos, on_epoch=True, sync_dist=True, batch_size=batch_size)
+                    
 
             # ✅ Log validation loss values
             for name, loss in self.enh_losses.items():
@@ -833,6 +899,8 @@ class Universe(pl.LightningModule):
                     self.logger.experiment.log(audio_logs, step=self.global_step)
                 else:
                     print("[DEBUG] No audio logs found! Wandb log skipped.")
+
+                
 
 
 

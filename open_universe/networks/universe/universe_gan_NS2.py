@@ -214,8 +214,28 @@ class UniverseGAN(Universe):
 
         # Run the conditioner network.
         # Note: We now pass the text transcript as an additional argument.
+        # if self.have_text:
+        #     cond, y_est, _ = self.condition_model(mix, text=text, train=True)
+        # else:
+        #     cond, y_est, _ = self.condition_model(mix, train=True)
+
         if self.have_text:
-            cond, y_est, _ = self.condition_model(mix, text=text, train=True)
+            # Handle the updated return value with text_metrics
+            result = self.condition_model(mix, text=text, train=True)
+            if len(result) == 4:  # With text metrics
+                cond, y_est, _, text_metrics = result
+                
+                # Log text metrics
+                if hasattr(self, 'text_metrics') and self.text_metrics:
+                    for k, v in text_metrics.items():
+                        if isinstance(v, (int, float)):
+                            self.log(f"text_checks/{k}", v, batch_size=mix.shape[0], **self.log_kwargs)
+                        elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
+                            # For top attended positions
+                            for i, pos in enumerate(v):
+                                self.log(f"text_checks/top_attended_{i}", pos, batch_size=mix.shape[0], **self.log_kwargs)
+            else:
+                cond, y_est, _ = result
         else:
             cond, y_est, _ = self.condition_model(mix, train=True)
 
