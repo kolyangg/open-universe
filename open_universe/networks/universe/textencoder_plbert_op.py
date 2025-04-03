@@ -68,13 +68,40 @@ class TextEncoder(nn.Module):
             for param in self.plbert.parameters():
                 param.requires_grad = False
 
+        # After defining self.fc_global and self.fc_seq
+        nn.init.xavier_uniform_(self.fc_global.weight)
+        nn.init.xavier_uniform_(self.fc_seq.weight)
+        nn.init.zeros_(self.fc_global.bias)
+        nn.init.zeros_(self.fc_seq.bias)
+
+        # Cache the tokenizer
+        self.phoneme_cache = {}
+
     def tokenize(self, sents):
         batched = []
         max_len = 0
         for sent in sents:
+
+            # Handle empty strings
+            if not sent or not sent.strip():
+                # Use a placeholder token or set of tokens instead of empty
+                token_ids = torch.LongTensor([0])  # Placeholder token ID
+                batched.append(token_ids)
+                max_len = max(max_len, 1)
+                continue
+
             # Use OpenPhonemizer to get phonemes.
             # Assume it returns a string; adjust if a list is returned.
-            phonemes = self.phonemizer(sent)
+            try:
+                if sent in self.phoneme_cache:
+                    phonemes = self.phoneme_cache[sent]
+                else:
+                    phonemes = self.phonemizer(sent)
+                    self.phoneme_cache[sent] = phonemes
+            except Exception as e:
+                print(f"[WARNING] Phonemization failed for: '{sent}'. Error: {e}")
+                phonemes = sent  # Fallback to the original text
+                
             # If needed, you could split on whitespace: pretext = ' '.join(phonemes)
             pretext = phonemes
             cleaned = self.text_cleaner(pretext)
@@ -102,7 +129,13 @@ class TextEncoder(nn.Module):
         device = next(self.plbert.parameters()).device
         phoneme_ids = phoneme_ids.to(device)
         attention_mask = attention_mask.to(device)
-        
+
+        # In TextEncoder's forward method
+        print(f"[DEBUG] Sample input text: '{input_data[0]}'")
+        print(f"[DEBUG] Phonemized form: '{self.phonemizer(input_data[0])}'")
+        print(f"[DEBUG] Token IDs shape: {phoneme_ids.shape}")
+        print(f"[DEBUG] Active tokens: {attention_mask.sum(dim=1).tolist()}")
+                
         outputs = self.plbert(phoneme_ids, attention_mask=attention_mask)
         # Use first token (CLS) for global embedding
         cls_embedding = outputs.last_hidden_state[:, 0, :]

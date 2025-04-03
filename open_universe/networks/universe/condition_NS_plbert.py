@@ -287,9 +287,26 @@ class CrossAttentionBlock(torch.nn.Module):
         self.layer_norm_ffn = torch.nn.LayerNorm(hidden_dim)
 
     def forward(self, x, cond, x_mask=None, cond_mask=None):
-        attn_out, _ = self.cross_attn(x, cond, cond, 
+        attn_out, attn_weights = self.cross_attn(x, cond, cond, 
                                       key_padding_mask=cond_mask,
-                                      need_weights=False)
+                                      need_weights=True)
+        
+        attn_weights_mean_per_head = attn_weights.mean(dim=1)  # Average across sequence
+        max_attentions = attn_weights.max(dim=-1)[0]  # Max attention per position
+        print(f"[DEBUG] Attention focus: {max_attentions.mean().item():.4f} (higher = more focused)")
+        print(f"[DEBUG] Attention weights stats: min={attn_weights.min().item()}, " 
+            f"max={attn_weights.max().item()}, mean={attn_weights.mean().item()}")
+        
+        # After computing attention weights
+        batch_size = attn_weights.shape[0]
+        if batch_size > 0:  # Check to avoid empty batch issues
+            # Get most attended positions for the first sample in batch
+            attn_sample = attn_weights[0]  # First sample in batch
+            top_k = min(5, attn_sample.shape[-1])
+            _, top_indices = torch.topk(attn_sample.mean(dim=0), top_k)
+            print(f"[DEBUG] Top {top_k} attended positions: {top_indices.tolist()}")
+                
+        
         x = x + attn_out
         x = self.layer_norm(x)
         ffn_out = self.ffn(x)
@@ -312,8 +329,18 @@ class FiLM(torch.nn.Module):
 
     def forward(self, x, cond):
         gamma = self.gamma_fc(cond).unsqueeze(1)  # (B, 1, feature_channels)
-        beta = self.beta_fc(cond).unsqueeze(1)      # (B, 1, feature_channels)
-        return self.scale * (gamma * x + beta)
+        beta = self.beta_fc(cond).unsqueeze(1)    # (B, 1, feature_channels)
+        
+        # Add these debug prints
+        print(f"[DEBUG] FiLM gamma stats: min={gamma.min().item():.4f}, max={gamma.max().item():.4f}")
+        print(f"[DEBUG] FiLM beta stats: min={beta.min().item():.4f}, max={beta.max().item():.4f}")
+        
+        # Make sure the scaling operation has an effect
+        result = self.scale * (gamma * x + beta)
+        print(f"[DEBUG] FiLM input magnitude: {x.abs().mean().item():.4f}")
+        print(f"[DEBUG] FiLM output magnitude: {result.abs().mean().item():.4f}")
+        
+        return result
 
 class ConditionerNetwork(torch.nn.Module):
     def __init__(
@@ -405,6 +432,18 @@ class ConditionerNetwork(torch.nn.Module):
             self.cross_attention = CrossAttentionBlock(hidden_dim=cross_attention_dim, num_heads=4)
             # Projection: cross_attention_dim → total_channels
             self.attn_to_mel = torch.nn.Linear(cross_attention_dim, self.total_channels)
+
+
+            # Add these lines here to properly initialize the projection layers
+            torch.nn.init.xavier_uniform_(self.mel_to_attn.weight)
+            torch.nn.init.xavier_uniform_(self.attn_to_mel.weight)
+            torch.nn.init.zeros_(self.mel_to_attn.bias) 
+            torch.nn.init.zeros_(self.attn_to_mel.bias)
+
+            self.post_text_norm = torch.nn.BatchNorm1d(total_channels)
+            self.text_impact_factor = torch.nn.Parameter(torch.tensor(0.3)) # Learnable scaling factor for text conditioning
+            self.audio_bias = torch.nn.Parameter(torch.tensor(0.7))
+            print("[DEBUG] Text conditioning components initialized.")
         else:
             print("[DEBUG] No TextEncoder provided; skipping text conditioning.")
 
@@ -416,24 +455,65 @@ class ConditionerNetwork(torch.nn.Module):
         x_mel = self.input_mel(x_wav)  # (B, total_channels, T_mel)
 
         if self.text_encoder is not None and text is not None:
-            # Get text embeddings from PLBERT:
-            # global_emb: (B, film_global_dim)
-            # seq_emb: (B, T_text, cross_attention_dim) ideally – if not, you can add a projection.
-            global_emb, seq_emb = self.text_encoder(text)
+            # Store the original mel features before text conditioning
+            x_mel_orig = x_mel.clone()
 
-            # FiLM modulation:
-            x_mel_t = x_mel.transpose(1, 2)  # (B, T_mel, total_channels)
-            x_mel_t = self.film_global(x_mel_t, global_emb)  # still (B, T_mel, total_channels)
+            valid_indices = [i for i, t in enumerate(text) if t.strip()]
 
-            # Project mel features to cross-attention dimension:
-            x_mel_attn = self.mel_to_attn(x_mel_t)  # (B, T_mel, cross_attention_dim)
+            if not valid_indices:
+                # If all transcripts are empty, skip text conditioning
+                print("[DEBUG] All transcripts are empty, skipping text conditioning")
+            else:
+                # Process only valid transcripts
+                valid_text = [text[i] for i in valid_indices]
+                global_emb, seq_emb = self.text_encoder(valid_text)
 
-            # Apply cross-attention: queries are mel features, keys/values are sequence text embeddings.
-            x_mel_attn = self.cross_attention(x_mel_attn, seq_emb)  # (B, T_mel, cross_attention_dim)
+                print(f"[DEBUG] Global embedding stats: min={global_emb.min().item()}, max={global_emb.max().item()}, " 
+                    f"mean={global_emb.mean().item()}, std={global_emb.std().item()}")
+                print(f"[DEBUG] Sequence embedding shape: {seq_emb.shape}")
 
-            # Project back to original mel dimension:
-            x_mel_t = self.attn_to_mel(x_mel_attn)  # (B, T_mel, total_channels)
-            x_mel = x_mel_t.transpose(1, 2)  # (B, total_channels, T_mel)
+                # FiLM modulation:
+                x_mel_t = x_mel.transpose(1, 2)  # (B, T_mel, total_channels)
+                x_mel_t = self.film_global(x_mel_t, global_emb)  # still (B, T_mel, total_channels)
+
+                # Project mel features to cross-attention dimension:
+                x_mel_attn = self.mel_to_attn(x_mel_t)  # (B, T_mel, cross_attention_dim)
+
+                # Apply cross-attention: queries are mel features, keys/values are sequence text embeddings.
+                x_mel_attn = self.cross_attention(x_mel_attn, seq_emb)  # (B, T_mel, cross_attention_dim)
+
+                # Project back to original mel dimension:
+                x_mel_t = self.attn_to_mel(x_mel_attn)  # (B, T_mel, total_channels)
+
+                # Normalize after fusion
+                x_mel_norm = (x_mel_t.transpose(1,2)**2).sum(dim=-2, keepdim=True).mean(dim=-1, keepdim=True).sqrt()
+                x_mel_conditioned = x_mel_t.transpose(1,2) / x_mel_norm.clamp(min=1e-5)
+                
+                # Before blending with the impact factor
+                print(f"[DEBUG] Before conditioning - Mel features magnitude: {x_mel_orig.abs().mean().item()}")
+                print(f"[DEBUG] Conditioned features magnitude: {x_mel_conditioned.abs().mean().item()}")
+                
+                # Blend the original and conditioned features using the impact factor
+                blend_factor = torch.sigmoid(self.text_impact_factor)
+                print(f"[DEBUG] Blend factor (should be 0-1): {blend_factor.item()}")
+                # Blend the original and conditioned mel features
+                x_mel = (1.0 - blend_factor) * x_mel_orig + blend_factor * x_mel_conditioned
+
+                # Add batch normalization to maintain consistent scale
+                if not hasattr(self, 'post_text_norm'):
+                    self.post_text_norm = torch.nn.BatchNorm1d(self.total_channels)
+                    self.post_text_norm = self.post_text_norm.to(x_mel.device)
+                
+
+                # Normalize to maintain similar magnitude as input
+                x_mel_norm = x_mel.norm(dim=1, keepdim=True)
+                x_mel_orig_norm = x_mel_orig.norm(dim=1, keepdim=True)
+                x_mel = x_mel * (x_mel_orig_norm / x_mel_norm.clamp(min=1e-8))
+                
+                print(f"[DEBUG] Text impact factor: {self.text_impact_factor.item()}")
+                print(f"[DEBUG] After blending and normalization - Mel features magnitude: {x_mel.abs().mean().item()}")
+                print(f"[DEBUG] Feature difference magnitude: {(x_mel - x_mel_orig).abs().mean().item()}")
+                
 
         if self.precoding:
             x = self.precoding(x)
