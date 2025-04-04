@@ -32,7 +32,8 @@ Author: Robin Scheibler (@fakufaku)
 # from .condition import ConditionerNetwork
 # from .condition_NS_film import ConditionerNetwork ### NEW WITH TEXT ENCODER ###
 #from .condition_NS_film_ca import ConditionerNetwork ### NEW WITH TEXT ENCODER and CA ###
-from .condition_NS_plbert import ConditionerNetwork ### NEW WITH TEXT ENCODER and CA ###
+# from .condition_NS_plbert import ConditionerNetwork ### NEW WITH TEXT ENCODER and CA ###
+from .condition_NS_plbert_simple import ConditionerNetwork ### Cross-attention only (no FILM)
 from .lora import UniverseLoRA
 from .mdn import MixtureDensityNetworkLoss
 from .score import ScoreNetwork
