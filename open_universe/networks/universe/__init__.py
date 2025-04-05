@@ -33,14 +33,16 @@ Author: Robin Scheibler (@fakufaku)
 # from .condition_NS_film import ConditionerNetwork ### NEW WITH TEXT ENCODER ###
 #from .condition_NS_film_ca import ConditionerNetwork ### NEW WITH TEXT ENCODER and CA ###
 # from .condition_NS_plbert import ConditionerNetwork ### NEW WITH TEXT ENCODER and CA ###
-from .condition_NS_plbert_simple import ConditionerNetwork ### Cross-attention only (no FILM)
+# from .condition_NS_plbert_simple import ConditionerNetwork ### Cross-attention only (no FILM)
+from .condition_NS_plbert_simple_m import ConditionerNetwork ### new Miipher-like easier version
 from .lora import UniverseLoRA
 from .mdn import MixtureDensityNetworkLoss
 from .score import ScoreNetwork
 from .universe import Universe
 # from .universe_gan import UniverseGAN
 # from .universe_gan_NS import UniverseGAN
-from .universe_gan_NS2 import UniverseGAN
+# from .universe_gan_NS2 import UniverseGAN
+from .universe_gan_NS2_m import UniverseGAN ### new Miipher-like easier version
 # from .textencoder_NS import TextEncoder
 # from .textencoder_bert import TextEncoder
 # from .textencoder_bert_ca import TextEncoder
