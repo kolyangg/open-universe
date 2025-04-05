@@ -8,6 +8,6 @@ accelerator: gpu
 devices: -1
 strategy: ddp_find_unused_parameters_true  # not sure why... ?
 check_val_every_n_epoch: null
-val_check_interval: 2 # 1000 # 1000 on serv # 5000 default 
+val_check_interval: 1000 # 1000 on serv # 5000 default 
 default_root_dir: .
 profiler: false
