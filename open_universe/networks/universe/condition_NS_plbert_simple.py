@@ -482,7 +482,7 @@ class ConditionerNetwork(torch.nn.Module):
                 print(f"[DEBUG] Conditioned features magnitude: {x_mel_conditioned.abs().mean().item()}")
                 
                 # Constrain the text impact factor
-                impact = torch.clamp(self.text_impact_factor, 0.0, 0.3)
+                impact = torch.clamp(self.text_impact_factor, 0.0, 0.5) # 0.3 looks to low influence
                 blend_factor = torch.sigmoid(impact)
                 print(f"[DEBUG] Blend factor (should be 0-1): {blend_factor.item()}")
                 
