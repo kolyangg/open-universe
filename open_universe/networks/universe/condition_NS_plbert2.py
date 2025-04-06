@@ -559,14 +559,217 @@ class ConditionerNetwork(torch.nn.Module):
             self.post_text_norm = torch.nn.BatchNorm1d(total_channels)
             # Initialize with a positive value to work well with sigmoid in the blend formula
             # 1.0 will result in sigmoid(1.0) ≈ 0.73, giving blend_factor ≈ 0.77
-            self.text_impact_factor = torch.nn.Parameter(torch.tensor(1.0)) 
+            self.text_impact_factor = torch.nn.Parameter(torch.tensor(0.4)) #  1.0
             # Remove unused parameter
             # self.audio_bias = torch.nn.Parameter(torch.tensor(0.7))
             print("[DEBUG] Text conditioning components initialized.")
         else:
             print("[DEBUG] No TextEncoder provided; skipping text conditioning.")
 
-    def forward(self, x, x_wav=None, train=False, text=None):
+    # def forward(self, x, x_wav=None, train=False, text=None):
+
+    #     text_metrics = {} # for wandb logging
+
+    #     n_samples = x.shape[-1]
+    #     if x_wav is None:
+    #         x_wav = x
+
+    #     x_mel = self.input_mel(x_wav)  # (B, total_channels, T_mel)
+
+    #     if self.text_encoder is not None and text is not None:
+    #         # Store the original mel features before text conditioning
+    #         x_mel_orig = x_mel.clone()
+            
+    #         # Find valid text inputs (non-empty)
+    #         valid_indices = [i for i, t in enumerate(text) if t.strip()]
+
+    #         if not valid_indices:
+    #             # If all transcripts are empty, skip text conditioning
+    #             print("[DEBUG] All transcripts are empty, skipping text conditioning")
+    #         else:
+    #             # Set text encoder to training mode when appropriate
+    #             if train:
+    #                 self.text_encoder.train()
+    #             else:
+    #                 self.text_encoder.eval()
+                
+    #             # Process only valid transcripts
+    #             valid_text = [text[i] for i in valid_indices]
+    #             global_emb, seq_emb = self.text_encoder(valid_text)
+
+    #             print(f"[DEBUG] Global embedding stats: min={global_emb.min().item():.4f}, max={global_emb.max().item():.4f}, " 
+    #                 f"mean={global_emb.mean().item():.4f}, std={global_emb.std().item():.4f}")
+    #             print(f"[DEBUG] Sequence embedding shape: {seq_emb.shape}")
+
+    #             # log for wandb
+    #             text_metrics["global_emb_min"] = global_emb.min().item()
+    #             text_metrics["global_emb_max"] = global_emb.max().item()
+    #             text_metrics["global_emb_mean"] = global_emb.mean().item()
+    #             text_metrics["global_emb_std"] = global_emb.std().item()
+
+    #             # Create a copy of original mel features for residual connection
+    #             x_mel_orig = x_mel.clone()
+                
+    #             # Apply global conditioning first:
+    #             # -----------------------------
+    #             # FiLM modulation (transpose to sequence-first for FiLM)
+    #             x_mel_t = x_mel.transpose(1, 2)  # (B, T_mel, total_channels)
+                
+    #             # Apply FiLM modulation with enhanced conditioning
+    #             x_mel_t, film_metrics = self.film_global(x_mel_t, global_emb)  # (B, T_mel, total_channels)
+    #             text_metrics.update(film_metrics)  # Merge metrics dictionaries
+                
+    #             # Apply token-level conditioning:
+    #             # -----------------------------
+    #             # Project mel features to cross-attention dimension
+    #             x_mel_attn = self.mel_to_attn(x_mel_t)  # (B, T_mel, cross_attention_dim)
+                
+    #             # Apply progressive cross-attention (sequence of layers)
+    #             for i, attn_layer in enumerate(self.cross_attention):
+    #                 x_mel_attn, layer_metrics = attn_layer(x_mel_attn, seq_emb)
+    #                 # Add layer index to metrics for better tracking
+    #                 prefixed_metrics = {f"layer{i}_{k}": v for k, v in layer_metrics.items()}
+    #                 text_metrics.update(prefixed_metrics)
+                
+    #             # Project back to original mel dimension
+    #             x_mel_t_ca = self.attn_to_mel(x_mel_attn)  # (B, T_mel, total_channels)
+                
+    #             # Convert both representations back to channel-first
+    #             x_mel_film = x_mel_t.transpose(1, 2)  # FiLM output (B, C, T)
+    #             x_mel_ca = x_mel_t_ca.transpose(1, 2)   # Cross-attention output (B, C, T)
+                
+    #             # Simple adaptive balancing of global vs token-level conditioning
+    #             # Start with more global conditioning (70% FiLM, 30% cross-attention)
+                
+    #             # Add an epoch-dependent scaling (UPDATED)
+    #             # This ramps up the blend factor over the first 10 epochs
+    #             if hasattr(self, 'current_epoch'):
+    #                 current_epoch = self.current_epoch
+    #             elif hasattr(self, '_parameters') and 'text_impact_factor' in self._parameters:
+    #                 # Try to access from parent module if available
+    #                 if hasattr(self._parameters['text_impact_factor'], '_cdata'):
+    #                     parent_module = self._parameters['text_impact_factor']._cdata.obj
+    #                     current_epoch = getattr(parent_module, 'current_epoch', 0)
+    #                 else:
+    #                     current_epoch = 0
+    #             else:
+    #                 current_epoch = 0
+
+                
+    #             training_progress = min(1.0, current_epoch / 10)  # Ramp up over 10 epochs
+                
+    #             # This helps stabilize early training
+    #             film_weight = 0.5 # updated
+    #             ca_weight = 0.5 # updated
+                
+    #             # Optionally, make this progressive too
+    #             if training_progress < 0.3:
+    #                 # In early training, rely slightly more on global cues
+    #                 film_weight = 0.6
+    #                 ca_weight = 0.4
+                
+    #             # Combine FiLM and cross-attention results
+    #             x_mel_conditioned = film_weight * x_mel_film + ca_weight * x_mel_ca
+                
+    #             # Before blending with the impact factor
+    #             print(f"[DEBUG] Before conditioning - Mel features magnitude: {x_mel_orig.abs().mean().item():.4f}")
+    #             print(f"[DEBUG] Conditioned features magnitude: {x_mel_conditioned.abs().mean().item():.4f}")
+                
+    #             # Use sigmoid for smooth blending factor with a higher baseline
+    #             # This maps self.text_impact_factor to range 0.4-0.9
+    #             # Starts higher for more text impact
+                
+    #             # raw_factor = torch.sigmoid(self.text_impact_factor)
+    #             # blend_factor = 0.4 + 0.5 * raw_factor
+    #             # print(f"[DEBUG] Blend factor: {blend_factor.item():.4f} (0.4-0.9 range)")
+                
+                
+                
+                
+    #             # Add an epoch-dependent scaling
+    #             # Get the current epoch from the current state
+    #             # Default to 0 if not available
+    #             current_epoch = 0  # Default value
+    #             training_progress = min(1.0, current_epoch / 10)  # Ramp up over 10 epochs
+
+    #             # You can also just use a fixed low value for now
+    #             max_blend = 0.7  # Maximum blend factor
+    #             min_blend = 0.2  # Minimum starting blend
+    #             blend_factor = min_blend + (max_blend - min_blend) * training_progress
+
+    #             # Still use the impact factor for fine-tuning
+    #             raw_factor = torch.sigmoid(self.text_impact_factor) 
+    #             blend_factor = 0.2 + 0.1 * raw_factor  # Keep it in a lower range: 0.2-0.3
+
+    #             print(f"[DEBUG] Fixed lower blend factor: {blend_factor.item():.4f}")
+                                
+    #             # Create a residual mask to apply text features with varying intensity
+    #             # This applies more conditioning to the middle frequency range where speech formants are
+    #             # Attenuates conditioning at very low and very high frequencies
+    #             # This is a simple frequency-based prior to help the model use text where it matters most
+    #             freq_profile = torch.ones_like(x_mel_orig)
+    #             _, C, _ = freq_profile.shape
+    #             for c in range(C):
+    #                 # Create a bow shape with peak in the middle frequencies
+    #                 # Simple heuristic: 1.0 in middle decreasing to 0.7 at edges
+    #                 rel_pos = abs(c / C - 0.5) * 2.0  # 0 (middle) to 1 (edges)
+    #                 freq_scale = 1.0 - 0.3 * rel_pos  # 1.0 in middle to 0.7 at edges
+    #                 freq_profile[:, c, :] *= freq_scale
+                
+    #             # Combine original features with conditioned features
+    #             # Apply frequency-dependent blending
+    #             freq_aware_blend = blend_factor * freq_profile
+    #             x_mel = (1.0 - freq_aware_blend) * x_mel_orig + freq_aware_blend * x_mel_conditioned
+                
+    #             # Simple magnitude preservation to avoid signal weakening
+    #             avg_orig = x_mel_orig.abs().mean()
+    #             avg_new = x_mel.abs().mean()
+    #             scale = avg_orig / avg_new.clamp(min=1e-8)
+                
+    #             # Apply scaling to maintain similar magnitude but preserve text features
+    #             x_mel = x_mel * scale
+                
+    #             # Log all factors
+    #             print(f"[DEBUG] FiLM/CA ratio: {film_weight:.2f}/{ca_weight:.2f}")
+    #             print(f"[DEBUG] Scaling factor: {scale.item():.4f}")
+    #             text_metrics["film_weight"] = film_weight
+    #             text_metrics["ca_weight"] = ca_weight
+    #             text_metrics["scaling_factor"] = scale.item()
+                
+    #             print(f"[DEBUG] Text impact factor: {self.text_impact_factor.item()}")
+    #             print(f"[DEBUG] After blending and normalization - Mel features magnitude: {x_mel.abs().mean().item()}")
+    #             print(f"[DEBUG] Feature difference magnitude: {(x_mel - x_mel_orig).abs().mean().item()}")
+
+    #             # Feature metrics
+    #             text_metrics["mel_features_before"] = x_mel_orig.abs().mean().item()
+    #             text_metrics["mel_features_conditioned"] = x_mel_conditioned.abs().mean().item()
+    #             text_metrics["blend_factor"] = blend_factor.item()
+    #             text_metrics["text_impact_factor"] = self.text_impact_factor.item()
+    #             text_metrics["mel_features_after"] = x_mel.abs().mean().item()
+    #             text_metrics["feature_difference"] = (x_mel - x_mel_orig).abs().mean().item()
+                
+
+    #     if self.precoding:
+    #         x = self.precoding(x)
+
+    #     x = self.input_conv(x)
+    #     h, lengths = self.encoder(x, x_mel)
+    #     y_hat, conditions = self.decoder(h, lengths)
+
+    #     if self.output_conv is not None:
+    #         y_hat = self.output_conv(y_hat)
+    #     if self.precoding:
+    #         y_hat = self.precoding.inv(y_hat)
+
+    #     y_hat = torch.nn.functional.pad(y_hat, (0, n_samples - y_hat.shape[-1]))
+
+    #     if train:
+    #         return conditions, y_hat, h, text_metrics
+    #     else:
+    #         return conditions if not self.text_encoder or text is None else (conditions, text_metrics)
+    
+    
+    def forward(self, x, x_wav=None, train=False, text=None, current_epoch=0):
 
         text_metrics = {} # for wandb logging
 
@@ -638,12 +841,15 @@ class ConditionerNetwork(torch.nn.Module):
                 x_mel_film = x_mel_t.transpose(1, 2)  # FiLM output (B, C, T)
                 x_mel_ca = x_mel_t_ca.transpose(1, 2)   # Cross-attention output (B, C, T)
                 
-                # Simple adaptive balancing of global vs token-level conditioning
-                # Start with more global conditioning (70% FiLM, 30% cross-attention)
-                # This helps stabilize early training
-                film_weight = 0.7
-                ca_weight = 0.3
+                # Balance global vs token-level conditioning based on training stage
+                film_weight = 0.5
+                ca_weight = 0.5
                 
+                # In early training, rely more on global cues
+                if train and current_epoch < 3:
+                    film_weight = 0.6
+                    ca_weight = 0.4
+                    
                 # Combine FiLM and cross-attention results
                 x_mel_conditioned = film_weight * x_mel_film + ca_weight * x_mel_ca
                 
@@ -651,17 +857,16 @@ class ConditionerNetwork(torch.nn.Module):
                 print(f"[DEBUG] Before conditioning - Mel features magnitude: {x_mel_orig.abs().mean().item():.4f}")
                 print(f"[DEBUG] Conditioned features magnitude: {x_mel_conditioned.abs().mean().item():.4f}")
                 
-                # Use sigmoid for smooth blending factor with a higher baseline
-                # This maps self.text_impact_factor to range 0.4-0.9
-                # Starts higher for more text impact
-                raw_factor = torch.sigmoid(self.text_impact_factor)
-                blend_factor = 0.4 + 0.5 * raw_factor
-                print(f"[DEBUG] Blend factor: {blend_factor.item():.4f} (0.4-0.9 range)")
+                # SIMPLIFIED BLEND FACTOR CALCULATION
+                # Use a fixed low value to start, with small adjustments from text_impact_factor
+                raw_factor = torch.sigmoid(self.text_impact_factor) 
+                blend_factor = 0.2 + 0.1 * raw_factor  # Keep it in a lower range: 0.2-0.3
+                
+                print(f"[DEBUG] Fixed low blend factor: {blend_factor.item():.4f}")
                 
                 # Create a residual mask to apply text features with varying intensity
                 # This applies more conditioning to the middle frequency range where speech formants are
                 # Attenuates conditioning at very low and very high frequencies
-                # This is a simple frequency-based prior to help the model use text where it matters most
                 freq_profile = torch.ones_like(x_mel_orig)
                 _, C, _ = freq_profile.shape
                 for c in range(C):
@@ -702,7 +907,6 @@ class ConditionerNetwork(torch.nn.Module):
                 text_metrics["text_impact_factor"] = self.text_impact_factor.item()
                 text_metrics["mel_features_after"] = x_mel.abs().mean().item()
                 text_metrics["feature_difference"] = (x_mel - x_mel_orig).abs().mean().item()
-                
 
         if self.precoding:
             x = self.precoding(x)
