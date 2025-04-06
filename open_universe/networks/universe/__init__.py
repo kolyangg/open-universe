@@ -54,10 +54,16 @@ from .score import ScoreNetwork
 from .universe import Universe
 
 
-# ### PL-BERT SIMPLE
+# # ### PL-BERT SIMPLE
 # from .condition_NS_plbert_simple import ConditionerNetwork ### Cross-attention only (no FILM)
 # from .universe_gan_NS2 import UniverseGAN
 # from .textencoder_plbert_op import TextEncoder
+
+# ### PL-BERT UPDATED
+from .condition_NS_plbert2 import ConditionerNetwork ### Cross-attention only (no FILM)
+from .universe_gan_NS2 import UniverseGAN
+from .textencoder_plbert_op2 import TextEncoder
+
 
 ### PL-BERT SIMPLE (MIIPHER-LIKE)
 # from .condition_NS_plbert_simple_m import ConditionerNetwork ### new Miipher-like easier version
@@ -65,9 +71,9 @@ from .universe import Universe
 # from .textencoder_plbert_op import TextEncoder
 
 ### BERT SIMPLE
-from .condition_NS_plbert_simple import ConditionerNetwork ### new Miipher-like easier version
-from .universe_gan_NS2 import UniverseGAN
-from .textencoder_bert_new import TextEncoder
+# from .condition_NS_plbert_simple import ConditionerNetwork ### new Miipher-like easier version
+# from .universe_gan_NS2 import UniverseGAN
+# from .textencoder_bert_new import TextEncoder
 
 # ### BERT SIMPLE (MIIPHER-LIKE)
 # from .condition_NS_plbert_simple_m import ConditionerNetwork ### new Miipher-like easier version

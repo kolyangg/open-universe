@@ -102,6 +102,9 @@ class UniverseGAN(Universe):
         # For GAN training, we disable automatic optimization.
         self.automatic_optimization = False
 
+        # Enable text metrics logging
+        self.text_metrics = True
+
         self.log_kwargs = dict(
             on_step=True,
             on_epoch=False,
