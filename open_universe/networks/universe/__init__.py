@@ -59,10 +59,17 @@ from .universe import Universe
 # from .universe_gan_NS2 import UniverseGAN
 # from .textencoder_plbert_op import TextEncoder
 
-# ### PL-BERT UPDATED
-from .condition_NS_plbert2 import ConditionerNetwork ### Cross-attention only (no FILM)
-from .universe_gan_NS2 import UniverseGAN
-from .textencoder_plbert_op2 import TextEncoder
+# # ### PL-BERT UPDATED
+# from .condition_NS_plbert2 import ConditionerNetwork ### Cross-attention only (no FILM)
+# from .universe_gan_NS2 import UniverseGAN
+# from .textencoder_plbert_op2 import TextEncoder
+
+
+# ### PL-BERT UPDATED - TEXT FEATURES IN MORE PLACES
+from .condition_NS_plbert3 import ConditionerNetwork ### Cross-attention only (no FILM)
+from .universe_gan_NS3 import UniverseGAN
+from .textencoder_plbert_op3 import TextEncoder
+from .score3 import ScoreNetwork
 
 
 ### PL-BERT SIMPLE (MIIPHER-LIKE)
