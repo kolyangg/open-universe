@@ -565,6 +565,10 @@ class ConditionerNetwork(torch.nn.Module):
             torch.nn.init.xavier_uniform_(self.attn_to_mel.weight)
             torch.nn.init.zeros_(self.mel_to_attn.bias) 
             torch.nn.init.zeros_(self.attn_to_mel.bias)
+            
+            self.text_direct_proj = torch.nn.Linear(film_global_dim, self.total_channels)
+            torch.nn.init.xavier_uniform_(self.text_direct_proj.weight)
+            torch.nn.init.zeros_(self.text_direct_proj.bias)
 
             self.post_text_norm = torch.nn.BatchNorm1d(total_channels)
             # Initialize with a positive value to work well with sigmoid in the blend formula
