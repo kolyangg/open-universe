@@ -4,7 +4,7 @@
 # 16 kHz Voicebank-DEMAND dataset
 defaults:
   - _self_
-  - override /datamodule: default # updated
+  - override /datamodule: default_NS2 # updated
   - override /model: default
   - override /trainer: default
 
