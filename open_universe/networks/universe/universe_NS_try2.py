@@ -1062,6 +1062,10 @@ class Universe(pl.LightningModule):
     def eval(self, no_ema=False):
         return self.train(False, no_ema=no_ema)
 
+    def on_save_checkpoint(self, checkpoint):
+        import os
+        if self.ema is not None:
+            checkpoint["ema"] = self.ema.state_dict()
 
     def to(self, *args, **kwargs):
         """Override PyTorch .to() to also transfer the EMA of the model weights"""

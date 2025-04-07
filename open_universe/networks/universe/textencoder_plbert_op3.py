@@ -9,8 +9,23 @@ import sys
 # Allow remote code if needed
 os.environ["TRUST_REMOTE_CODE"] = "True"
 
-# Define the PLBERT path relative to this file
-PLBERT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../_miipher/miipher2.0/plbert/'))
+# # Define the PLBERT path relative to this file
+# PLBERT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../_miipher/miipher2.0/plbert/'))
+# if PLBERT_PATH not in sys.path:
+#     sys.path.insert(0, PLBERT_PATH)
+    
+    
+# In textencoder_plbert_op3.py, replace the PLBERT_PATH line with:
+
+# Define the PLBERT path by checking environment variable first
+if "PLBERT_PATH" in os.environ and os.path.exists(os.environ["PLBERT_PATH"]):
+    PLBERT_PATH = os.environ["PLBERT_PATH"]
+    print(f"Using PLBERT_PATH from environment: {PLBERT_PATH}")
+else:
+    # Fall back to relative path as before
+    PLBERT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../_miipher/miipher2.0/plbert/'))
+    print(f"Using default PLBERT_PATH: {PLBERT_PATH}")
+
 if PLBERT_PATH not in sys.path:
     sys.path.insert(0, PLBERT_PATH)
 
