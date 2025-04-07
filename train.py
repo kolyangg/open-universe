@@ -71,7 +71,8 @@ def main(cfg):
     loss_name = val_loss_name.split("/")[-1]
 
     wandb_logger = pl_loggers.WandbLogger(
-        project="universe",
+        # project="universe",
+        project="universe_small",
         name=exp_name,
         config=OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
     )

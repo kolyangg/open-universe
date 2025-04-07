@@ -26,7 +26,8 @@ from omegaconf import OmegaConf
 from .. import bigvgan as gan
 from .blocks import PReLU_Conv
 # Import the Universe base class that already supports text conditioning.
-from .universe_NS_try import Universe
+# from .universe_NS_try import Universe
+from .universe_NS import Universe
 
 log = logging.getLogger(__name__)
 
@@ -175,7 +176,8 @@ class UniverseGAN(Universe):
 
         # Run the conditioner network.
         # Note: We now pass the text transcript as an additional argument.
-        cond, y_est, _ = self.condition_model(mix, text=text, train=True)
+        # cond, y_est, _ = self.condition_model(mix, text=text, train=True)
+        cond, y_est, _ = self.condition_model(mix, train=True)
 
         if self.detach_cond:
             cond = [c.detach() for c in cond]
