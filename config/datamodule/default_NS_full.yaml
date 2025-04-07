@@ -5,7 +5,7 @@ train:
         pin_memory: true
         num_workers: 6
         shuffle: true
-        batch_size: 15 # 10  # == 40 with 4 GPUs
+        batch_size: 12 # 15 # 10  # == 40 with 4 GPUs
 val:
     dataset: vb-val-16k
     dl_opts:
@@ -32,7 +32,7 @@ datasets:
         split: train
         audio_len: 2.0
         part_used: 1.0 # 0.01  # Use only 5% of data
-        
+
     vb-val-16k: # NORMAL
         _target_: open_universe.datasets.NoisyDataset
         audio_path: ${..vb-train-16k.audio_path}
