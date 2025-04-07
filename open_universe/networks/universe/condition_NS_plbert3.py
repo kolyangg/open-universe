@@ -482,6 +482,20 @@ class ConditionerNetwork(torch.nn.Module):
     ):
         super().__init__()
         
+         # Print a detailed header
+        print("\n" + "="*50)
+        print("ConditionerNetwork Initialization Details")
+        print("="*50)
+        print(f"Configuration:")
+        print(f"  Input Channels: {input_channels}")
+        print(f"  Output Channels: {output_channels}")
+        print(f"  Channels: {n_channels}")
+        print(f"  Rate Factors: {rate_factors}")
+        print(f"  Mel Specs: {n_mels} mels, oversample={n_mel_oversample}")
+        print(f"  Seq Model: {seq_model}")
+        print(f"  Text Encoder: {'Enabled' if text_encoder_config else 'Disabled'}")
+        print("="*50 + "\n")
+        
         # Initialize training tracking variables
         self.current_epoch = 0  # Will be updated by parent module
         self.input_conv = cond_weight_norm(
@@ -579,6 +593,10 @@ class ConditionerNetwork(torch.nn.Module):
             print("[DEBUG] Text conditioning components initialized.")
         else:
             print("[DEBUG] No TextEncoder provided; skipping text conditioning.")
+            
+        
+         # Detailed Network Structure Printing
+        self._print_network_structure()
 
     # def forward(self, x, x_wav=None, train=False, text=None):
 
@@ -782,6 +800,61 @@ class ConditionerNetwork(torch.nn.Module):
     #     else:
     #         return conditions if not self.text_encoder or text is None else (conditions, text_metrics)
     
+    
+    def _print_network_structure(self):
+        """
+        Print a detailed breakdown of the network structure
+        """
+        print("\n" + "="*50)
+        print("Network Structure Details")
+        print("="*50)
+        
+        # Input Convolution
+        print("\n1. Input Convolution:")
+        print(f"   {self.input_conv}")
+        
+        # Mel Adapter
+        print("\n2. Mel Adapter:")
+        print(f"   Channels: {self.input_mel.conv}")
+        print(f"   Mel Spectrogram Transform: {self.input_mel.mel_spec}")
+        
+        # Encoder
+        print("\n3. Encoder:")
+        print("   Downsampling Modules:")
+        for i, ds_module in enumerate(self.encoder.ds_modules):
+            print(f"   - Module {i}: {ds_module}")
+        
+        print("\n   Strided Convolutions:")
+        for i, st_conv in enumerate(self.encoder.st_convs):
+            if st_conv is not None:
+                print(f"   - Conv {i}: {st_conv}")
+        
+        if self.encoder.seq_model == "gru":
+            print("\n   GRU Details:")
+            print(f"   {self.encoder.gru}")
+        
+        # Decoder
+        print("\n4. Decoder:")
+        print("   Upsampling Modules:")
+        for i, up_module in enumerate(self.decoder.up_modules):
+            print(f"   - Module {i}: {up_module}")
+        
+        # Output Convolution
+        if self.output_conv is not None:
+            print("\n5. Output Convolution:")
+            print(f"   {self.output_conv}")
+        
+        # Text Conditioning Components
+        if self.text_encoder is not None:
+            print("\n6. Text Conditioning:")
+            print("   Text Encoder:", self.text_encoder)
+            print("   FiLM Global:", self.film_global)
+            print("   Mel → Attn Projection:", self.mel_to_attn)
+            print("   Cross-Attention Blocks:", self.cross_attention)
+            print("   Attn → Mel Projection:", self.attn_to_mel)
+            print("   Direct Text Projection:", self.text_direct_proj)
+        
+        print("\n" + "="*50 + "\n")
     
     def forward(self, x, x_wav=None, train=False, text=None, current_epoch=0):
 

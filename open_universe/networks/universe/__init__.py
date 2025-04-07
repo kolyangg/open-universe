@@ -72,8 +72,16 @@ from .universe_NS_try import Universe
 # from .universe_gan_NS import UniverseGAN
 
 
-# # ### PL-BERT UPDATED - TEXT FEATURES IN MORE PLACES (CURRENT)
-from .condition_NS_plbert3 import ConditionerNetwork ### Cross-attention only (no FILM)
+# # ### PL-BERT UPDATED - TEXT FEATURES IN MORE PLACES (06 APR)
+# from .condition_NS_plbert3 import ConditionerNetwork ### Cross-attention only (no FILM)
+# from .universe_gan_NS3 import UniverseGAN
+# from .textencoder_plbert_op3 import TextEncoder
+# from .score3 import ScoreNetwork
+
+
+
+# # ### PL-BERT UPDATED - TEXT FEATURES AFTER GRU (CURRENT)
+from .condition_NS_plbert5 import ConditionerNetwork ### Cross-attention only (no FILM)
 from .universe_gan_NS3 import UniverseGAN
 from .textencoder_plbert_op3 import TextEncoder
 from .score3 import ScoreNetwork
