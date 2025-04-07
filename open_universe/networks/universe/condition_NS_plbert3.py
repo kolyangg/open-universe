@@ -315,6 +315,13 @@ class CrossAttentionBlock(torch.nn.Module):
             need_weights=True
         )
         
+        
+        # Add noise to prevent attention collapse
+        if self.training:
+            noise_scale = 0.1 * torch.exp(-0.1 * torch.tensor(getattr(self, 'global_step', 0.0)))
+            attn_weights = attn_weights + torch.rand_like(attn_weights) * noise_scale
+            attn_weights = attn_weights / attn_weights.sum(dim=-1, keepdim=True)
+        
         # Apply temperature to sharpen attention
         # Track original weights for debugging
         orig_attn_max = attn_weights.max(dim=-1)[0].mean().item()
@@ -852,24 +859,33 @@ class ConditionerNetwork(torch.nn.Module):
                 x_mel_film = x_mel_t.transpose(1, 2)  # FiLM output (B, C, T)
                 x_mel_ca = x_mel_t_ca.transpose(1, 2)   # Cross-attention output (B, C, T)
                 
-                # Balance global vs token-level conditioning based on training stage
-                film_weight = 0.5
-                ca_weight = 0.5
+                # # Balance global vs token-level conditioning based on training stage
+                # film_weight = 0.5
+                # ca_weight = 0.5
                 
-                # In early training, rely more on global cues
-                if train and current_epoch < 3:
+                # # In early training, rely more on global cues
+                # if train and current_epoch < 3:
+                #     film_weight = 0.6
+                #     ca_weight = 0.4
+                
+                # With adaptive ratio:
+                if current_epoch < 10:
+                    # Start with more global FiLM conditioning
+                    film_weight = 0.7
+                    ca_weight = 0.3
+                elif current_epoch < 20:
+                    # Gradually shift to more token-level conditioning
                     film_weight = 0.6
                     ca_weight = 0.4
+                else:
+                    # More emphasis on cross-attention for fine details
+                    film_weight = 0.5
+                    ca_weight = 0.5
+                                
                     
                 # Combine FiLM and cross-attention results
                 x_mel_conditioned = film_weight * x_mel_film + ca_weight * x_mel_ca
                 
-                # Before blending with the impact factor
-                mel_orig_mag = x_mel_orig.abs().mean().item()
-                mel_cond_mag = x_mel_conditioned.abs().mean().item()
-                print(f"[MEL DEBUG] Before conditioning - Mel features magnitude: {mel_orig_mag:.4f}")
-                print(f"[MEL DEBUG] Conditioned features magnitude: {mel_cond_mag:.4f}")
-                print(f"[MEL DEBUG] Conditioning relative impact: {(mel_cond_mag - mel_orig_mag) / mel_orig_mag:.4f}")
                 
                 # TRAINING-AWARE BLEND FACTOR CALCULATION
                 
@@ -896,17 +912,39 @@ class ConditionerNetwork(torch.nn.Module):
                 # Start with extremely low text influence and gradually ramp up over 20 epochs
                 training_progress = min(1.0, current_epoch / 20.0)  # Ramp up over 20 epochs
                 
+                
+                
+                # Add a small direct contribution from text embeddings
+                if training_progress > 0.2:  # Only enable after some initial training
+                    # Project global embedding to mel dimension
+                    direct_proj = self.text_direct_proj(global_emb)  # Add this layer to __init__
+                    direct_proj = direct_proj.unsqueeze(-1).expand(-1, -1, x_mel_conditioned.shape[-1])
+                    
+                    # Add small direct contribution 
+                    direct_scale = 0.1 * min(1.0, (training_progress - 0.2) / 0.3)
+                    x_mel_conditioned = x_mel_conditioned + direct_scale * direct_proj
+                                
+                                
+                
+                # Before blending with the impact factor
+                mel_orig_mag = x_mel_orig.abs().mean().item()
+                mel_cond_mag = x_mel_conditioned.abs().mean().item()
+                print(f"[MEL DEBUG] Before conditioning - Mel features magnitude: {mel_orig_mag:.4f}")
+                print(f"[MEL DEBUG] Conditioned features magnitude: {mel_cond_mag:.4f}")
+                print(f"[MEL DEBUG] Conditioning relative impact: {(mel_cond_mag - mel_orig_mag) / mel_orig_mag:.4f}")
+                
+                
                 # Apply a curve so that growth is slower at start and faster later
                 # using a cubic curve: training_progress^3
                 training_curve = training_progress ** 3
                 
                 # Very small base value (0.02) that increases to 0.3 over 20 epochs
                 # Start extremely small to avoid overwhelming the model
-                base_blend = 0.02 * training_curve  # Starts at 0.0 and grows to 0.02
+                base_blend = 0.15 * training_curve  # Starts at 0.0 and grows to 0.02
                 
                 # Add a small amount from learnable parameter
                 raw_factor = torch.sigmoid(self.text_impact_factor)
-                learnable_contribution = 0.03 * raw_factor * training_curve  # Max additional 0.03
+                learnable_contribution = 0.25 * raw_factor * training_curve  # Max additional 0.03
                 
                 # Final blend factor
                 blend_factor = base_blend + learnable_contribution  # Range: ~0.001 to 0.05 over training

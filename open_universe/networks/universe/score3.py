@@ -376,7 +376,7 @@ class ScoreNetwork(torch.nn.Module):
             # Gate the text influence (trainable parameter)
             # But scale it down significantly at start of training
             base_text_gate = torch.sigmoid(self.text_gate)
-            text_weight = base_text_gate * training_curve * 0.1  # Very small initial influence
+            text_weight = base_text_gate * training_curve * 0.3  # Very small initial influence
             
             # Debug info about training stage
             print(f"[SCORE DEBUG] Training progress: {training_progress:.4f} (epoch {current_epoch}/20)")
