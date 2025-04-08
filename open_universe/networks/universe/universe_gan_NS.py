@@ -401,7 +401,12 @@ class UniverseGAN(Universe):
         )
 
         # Optimizer for discriminators.
-        params_disc = list(self.loss_mrd.parameters()) + list(self.loss_mpd.parameters())
+        params_disc = list(self.loss_mrd.parameters()) + list(  ### as before (double MRD loss)
+            self.loss_mrd.parameters()
+        )
+        
+        
+        
         optimizer_disc = instantiate(
             self.opt_kwargs.discriminator, params=params_disc, _recursive_=False
         )
