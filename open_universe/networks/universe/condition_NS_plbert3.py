@@ -296,7 +296,7 @@ class CrossAttentionBlock(torch.nn.Module):
         self.layer_norm_ffn = torch.nn.LayerNorm(hidden_dim)
         
         # Temperature parameter to control attention sharpness
-        self.attention_temperature = torch.nn.Parameter(torch.tensor(0.1))
+        self.attention_temperature = torch.nn.Parameter(torch.tensor(0.05)) # 0.1
         
         # Residual connection scale factor
         self.residual_scale = torch.nn.Parameter(torch.tensor(0.8))
@@ -967,27 +967,31 @@ class ConditionerNetwork(torch.nn.Module):
                 # TRAINING-AWARE BLEND FACTOR CALCULATION
                 
                 # Try to get epoch info from global variables in universe_gan_NS3
-                try:
-                    # Import the module that has our global variable
-                    from ..universe.universe_gan_NS3 import CURRENT_EPOCH, GLOBAL_STEP
-                    current_epoch = CURRENT_EPOCH
-                    global_step = GLOBAL_STEP
-                    print(f"[EPOCH CHECK] Got epoch from universe_gan_NS3: {current_epoch}")
-                except (ImportError, AttributeError):
-                    # Fallback: Start with zero epoch
-                    current_epoch = 0
-                    global_step = 0
-                    print("[EPOCH CHECK] Warning: Could not access epoch from universe_gan_NS3")
-                    
-                    # Alternative: Use global_step if available to estimate epoch
-                    global_step = getattr(self, 'global_step', 0)
-                    if global_step > 0:
-                        # Assume ~1000 steps per epoch
-                        current_epoch = int(global_step / 1000)
-                        print(f"[EPOCH CHECK] Estimated epoch from steps: {current_epoch}")
+                if not current_epoch:
+                    try:
+                        # Import the module that has our global variable
+                        from ..universe.universe_gan_NS3 import CURRENT_EPOCH, GLOBAL_STEP
+                        current_epoch = CURRENT_EPOCH
+                        global_step = GLOBAL_STEP
+                        print(f"[EPOCH CHECK] Got epoch from universe_gan_NS3: {current_epoch}")
+                    except (ImportError, AttributeError):
+                        # Fallback: Start with zero epoch
+                        current_epoch = 0
+                        global_step = 0
+                        print("[EPOCH CHECK] Warning: Could not access epoch from universe_gan_NS3")
+                        
+                        # Alternative: Use global_step if available to estimate epoch
+                        global_step = getattr(self, 'global_step', 0)
+                        if global_step > 0:
+                            # Assume ~1000 steps per epoch
+                            current_epoch = int(global_step / 1000)
+                            print(f"[EPOCH CHECK] Estimated epoch from steps: {current_epoch}")
+                else:
+                    print(f"[EPOCH CHECK] Got epoch from fwd call: {current_epoch}")
                 
                 # Start with extremely low text influence and gradually ramp up over 20 epochs
-                training_progress = min(1.0, current_epoch / 20.0)  # Ramp up over 20 epochs
+                # training_progress = min(1.0, current_epoch / 20.0)  # Ramp up over 20 epochs
+                training_progress = 1.0 ### TEMP NOTEBOOK
                 
                 
                 

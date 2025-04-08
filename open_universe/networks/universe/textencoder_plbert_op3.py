@@ -23,7 +23,8 @@ if "PLBERT_PATH" in os.environ and os.path.exists(os.environ["PLBERT_PATH"]):
     print(f"Using PLBERT_PATH from environment: {PLBERT_PATH}")
 else:
     # Fall back to relative path as before
-    PLBERT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../_miipher/miipher2.0/plbert/'))
+    # PLBERT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../_miipher/miipher2.0/plbert/')) ### TEMP FOR NOTEBOOK!!! ###
+    PLBERT_PATH = "/home/kolyangg/Dipl/speech_enh/_miipher/miipher2.0/plbert/"
     print(f"Using default PLBERT_PATH: {PLBERT_PATH}")
 
 if PLBERT_PATH not in sys.path:

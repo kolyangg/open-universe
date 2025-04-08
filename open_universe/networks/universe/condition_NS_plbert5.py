@@ -23,12 +23,20 @@ import torch
 import torchaudio
 from hydra.utils import instantiate
 
-from .blocks import (
-    BinomialAntiAlias,
-    ConvBlock,
-    PReLU_Conv,
-    cond_weight_norm,
-)
+try:
+    from .blocks import (
+        BinomialAntiAlias,
+        ConvBlock,
+        PReLU_Conv,
+        cond_weight_norm,
+    )
+except ImportError:
+    from blocks import (
+        BinomialAntiAlias,
+        ConvBlock,
+        PReLU_Conv,
+        cond_weight_norm,
+    )
 
 
 ###############################################################################

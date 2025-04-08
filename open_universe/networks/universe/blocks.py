@@ -24,7 +24,10 @@ import scipy
 import torch
 import torch.nn.functional as F
 
-from .. import bigvgan
+try:
+    from .. import bigvgan
+except ImportError:
+    import bigvgan
 
 
 def init_weights(m, mean=0.0, std=0.01):
