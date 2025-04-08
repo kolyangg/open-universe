@@ -53,7 +53,8 @@ from .mdn import MixtureDensityNetworkLoss
 # from .score import ScoreNetwork
 # from .universe import Universe
 # from .universe_NS_try import Universe
-from .universe_NS import Universe
+# from .universe_NS import Universe
+# from .universe import Universe
 
 
 # # ### PL-BERT SIMPLE
@@ -71,7 +72,6 @@ from .universe_NS import Universe
 from .score import ScoreNetwork
 from .condition import ConditionerNetwork ### Cross-attention only (no FILM)
 from .universe_gan_NS import UniverseGAN
-
 
 # # ### PL-BERT UPDATED - TEXT FEATURES IN MORE PLACES (06 APR)
 # from .condition_NS_plbert3 import ConditionerNetwork ### Cross-attention only (no FILM)

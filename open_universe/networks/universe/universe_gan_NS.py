@@ -151,8 +151,15 @@ class UniverseGAN(Universe):
             return y_aux
 
     def training_step(self, batch, batch_idx):
+        try:
+            sch_score, sch_disc = self.lr_schedulers()
+            has_schedulers = True
+        except TypeError:
+            has_schedulers = False
+        
         # Retrieve the two audio elements and the text transcript.
         # Now batch should contain three elements: mix, target, text.
+        
         batch = batch[:3]
         mix_raw, target_raw, text = batch
         # For backward compatibility, if there is a special target for the conditioner,
@@ -222,6 +229,8 @@ class UniverseGAN(Universe):
                 self.loss_mrd.parameters(), self.grad_clip_vals.mrd
             )
             opt_disc.step()
+            if has_schedulers:
+                self.step_schedulers(sch_score, sch_disc)
         else:
             grad_norm_mpd = 0.0
             grad_norm_mrd = 0.0
