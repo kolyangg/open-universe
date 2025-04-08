@@ -26,8 +26,8 @@ from omegaconf import OmegaConf
 from .. import bigvgan as gan
 from .blocks import PReLU_Conv
 # from .universe import Universe
-# from .universe_NS import Universe # fixed logging
-from .universe_NS_try import Universe # with text encoder
+from .universe_NS import Universe # fixed logging
+# from .universe_NS_try import Universe # with text encoder
 
 log = logging.getLogger(__name__)
 
