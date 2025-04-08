@@ -52,7 +52,8 @@ from .lora import UniverseLoRA
 from .mdn import MixtureDensityNetworkLoss
 # from .score import ScoreNetwork
 # from .universe import Universe
-from .universe_NS_try import Universe
+# from .universe_NS_try import Universe
+from .universe_NS import Universe
 
 
 # # ### PL-BERT SIMPLE
@@ -67,9 +68,9 @@ from .universe_NS_try import Universe
 
 
 # DEFAULT
-# from .score import ScoreNetwork
-# from .condition import ConditionerNetwork ### Cross-attention only (no FILM)
-# from .universe_gan_NS import UniverseGAN
+from .score import ScoreNetwork
+from .condition import ConditionerNetwork ### Cross-attention only (no FILM)
+from .universe_gan_NS import UniverseGAN
 
 
 # # ### PL-BERT UPDATED - TEXT FEATURES IN MORE PLACES (06 APR)
@@ -81,10 +82,10 @@ from .universe_NS_try import Universe
 
 
 # # ### PL-BERT UPDATED - TEXT FEATURES AFTER GRU (CURRENT)
-from .condition_NS_plbert5 import ConditionerNetwork ### Cross-attention only (no FILM)
-from .universe_gan_NS3 import UniverseGAN
-from .textencoder_plbert_op3 import TextEncoder
-from .score3 import ScoreNetwork
+# from .condition_NS_plbert5 import ConditionerNetwork ### Cross-attention only (no FILM)
+# from .universe_gan_NS3 import UniverseGAN
+# from .textencoder_plbert_op3 import TextEncoder
+# from .score3 import ScoreNetwork
 
 
 ### PL-BERT SIMPLE (MIIPHER-LIKE)

@@ -3,7 +3,7 @@ train:
     dataset: vb-train-16k
     dl_opts:
         pin_memory: true
-        num_workers: 2 # 6
+        num_workers: 6 # 6
         shuffle: true
         batch_size: 15  # == 40 with 4 GPUs
 val:
