@@ -301,6 +301,9 @@ class UniverseGAN(Universe):
         opt_score.step()
         if self.ema is not None:
             self.ema.update(self.model_parameters())
+        
+        if has_schedulers:
+            self.step_schedulers(sch_score, sch_disc)
 
         # Log various losses and gradient norms.
         self.log(
@@ -350,6 +353,7 @@ class UniverseGAN(Universe):
                 f"{loss_gen_s=} {loss_gen_f=} {loss_fm_s=} {loss_fm_f=}"
             )
             breakpoint()
+
 
     def step_schedulers(self, sch_score, sch_disc):
         # Step the schedulers.
