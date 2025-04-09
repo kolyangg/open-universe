@@ -80,8 +80,15 @@ from .mdn import MixtureDensityNetworkLoss
 # from .score3 import ScoreNetwork
 
 # # ### REVERTING OLD VERSION MB GOOD (08 APR)
-from .condition_NS_plbert import ConditionerNetwork ### Cross-attention only (no FILM)
-from .universe_gan_NS2 import UniverseGAN
+# from .condition_NS_plbert import ConditionerNetwork ### Cross-attention only (no FILM)
+# from .universe_gan_NS2 import UniverseGAN
+# from .textencoder_plbert_op import TextEncoder
+# from .score import ScoreNetwork
+
+
+# # ### REVERTING OLD VERSION MB GOOD (08 APR) - TRYING TO FIX TRAINING PROCESS
+from .condition_NS_plbert_adj import ConditionerNetwork ### Cross-attention only (no FILM)
+from .universe_gan_NS2_adj import UniverseGAN
 from .textencoder_plbert_op import TextEncoder
 from .score import ScoreNetwork
 
