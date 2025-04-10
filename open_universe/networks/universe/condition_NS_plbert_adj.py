@@ -22,10 +22,6 @@ from .blocks import (
 )
 
 
-# ----------------------------------------------------------------------
-#  Old code structures from condition.py: MelAdapter, make_st_convs, etc.
-# ----------------------------------------------------------------------
-
 def make_st_convs(
     ds_factors,
     input_channels,
@@ -62,10 +58,6 @@ def make_st_convs(
 
 
 class MelAdapter(torch.nn.Module):
-    """
-    Same as old condition.py, used to compute mel-spectrogram
-    and do an initial conv block.  No text logic here.
-    """
     def __init__(
         self, n_mels, output_channels, ds_factor, oversample=2, use_weight_norm=False
     ):
@@ -85,7 +77,7 @@ class MelAdapter(torch.nn.Module):
         )
         self.conv_block = ConvBlock(output_channels, use_weight_norm=use_weight_norm)
 
-        # figure out padding for a good # frames
+        # workout the padding to get a good number of frames
         pad_tot = n_fft - ds_factor
         self.pad_left, self.pad_right = pad_tot // 2, pad_tot - pad_tot // 2
 
@@ -99,7 +91,9 @@ class MelAdapter(torch.nn.Module):
         x = self.mel_spec(x)  # => [B, n_mels, T_mel] (plus the old single freq dimension)
         x = x.squeeze(1)      # remove channel dim
 
-        # old condition.py logic: global normalization
+        # the paper mentions only that they normalize the mel-spec, not how
+        # I am trying a simple global normalization so that frames have
+        # unit energy on average
         norm = (x**2).sum(dim=-2, keepdim=True).mean(dim=-1, keepdim=True).sqrt()
         x = x / norm.clamp(min=1e-5)
 
@@ -113,10 +107,6 @@ class MelAdapter(torch.nn.Module):
 
 
 class ConditionerEncoder(torch.nn.Module):
-    """
-    Same as old condition.py.  Accepts the wave feature x plus x_mel,
-    merges them, does a GRU (if seq_model=gru).
-    """
     def __init__(
         self,
         ds_factors,
@@ -149,6 +139,7 @@ class ConditionerEncoder(torch.nn.Module):
             ]
         )
 
+        # the strided convolutions to adjust rate and channels to latent space
         self.st_convs = make_st_convs(
             ds_factors,
             input_channels,
@@ -167,7 +158,7 @@ class ConditionerEncoder(torch.nn.Module):
             )
             self.st_convs.append(None)
 
-        oc = input_channels * 2 ** len(ds_factors)  # e.g. 512
+        oc = input_channels * 2 ** len(ds_factors)  # number of output channels
 
         self.seq_model = seq_model
         if seq_model == "gru":
@@ -217,14 +208,13 @@ class ConditionerEncoder(torch.nn.Module):
             if self.with_gru_residual:
                 out = (out + res) / math.sqrt(2)
             out, *_ = self.conv_block2(out)
+        elif self.seq_model == "attention":
+            out = self.att(out)
 
         return out, lengths[::-1]
 
 
 class ConditionerDecoder(torch.nn.Module):
-    """
-    Same as old condition.py: up-sampling blocks that produce conditions.
-    """
     def __init__(
         self,
         up_factors,
@@ -275,7 +265,7 @@ class ConditionerDecoder(torch.nn.Module):
 
 
 # ----------------------------------------------------------------------
-#  NEW TEXT MODULES: FiLM & CrossAttention (ported from new code)
+#  NEW TEXT MODULES: FiLM & CrossAttention
 # ----------------------------------------------------------------------
 class CrossAttentionBlock(torch.nn.Module):
     def __init__(self, hidden_dim, num_heads=4):
@@ -376,6 +366,8 @@ class ConditionerNetwork(torch.nn.Module):
         decoder_act_type="prelu",
         precoding=None,
         input_channels=1,
+        # optional, if specified, an extra conv. layer is used as adapter
+        # for the output signal estimat y_est
         output_channels=None,
         use_weight_norm=False,
         seq_model="gru",
@@ -386,13 +378,9 @@ class ConditionerNetwork(torch.nn.Module):
         cross_attention_dim=256    # dimension for cross-attn
     ):
         super().__init__()
-
         self.input_conv = cond_weight_norm(
             torch.nn.Conv1d(
-                input_channels,
-                n_channels,
-                kernel_size=fb_kernel_size,
-                padding="same"
+                input_channels, n_channels, kernel_size=fb_kernel_size, padding="same"
             ),
             use=use_weight_norm,
         )
@@ -413,8 +401,6 @@ class ConditionerNetwork(torch.nn.Module):
         total_ds = math.prod(rate_factors)
         total_channels = 2 ** len(rate_factors) * n_channels  # e.g. 512
         self.total_channels = total_channels
-
-        # Mel adapter from old code
         self.input_mel = MelAdapter(
             n_mels,
             total_channels,
@@ -423,7 +409,6 @@ class ConditionerNetwork(torch.nn.Module):
             use_weight_norm=use_weight_norm,
         )
 
-        # Encoder/Decoder from old code
         self.encoder = ConditionerEncoder(
             rate_factors,
             n_channels,
@@ -490,6 +475,9 @@ class ConditionerNetwork(torch.nn.Module):
         """
         n_samples = x.shape[-1]
         if x_wav is None:
+            # this is used in case some type of transform is appled to
+            # x before input.
+            # This way, we can pass the original waveform
             x_wav = x
 
         # Compute mel features
@@ -542,13 +530,13 @@ class ConditionerNetwork(torch.nn.Module):
             # old path => do nothing special, x_mel remains as is
             print("[DEBUG] No text => old conditioning path in condition_plbert.")
 
-        # old code: optional precoding
         if self.precoding:
-            x = self.precoding(x)
+            x = self.precoding(x) # do this after mel-spec comp
 
         # old code: main forward
         x = self.input_conv(x)
-        h, lengths = self.encoder(x, x_mel)
+        h, lengths = self.encoder(x, x_mel) # latent representation
+        
         y_hat, conditions = self.decoder(h, lengths)
 
         if self.output_conv is not None:
@@ -557,7 +545,7 @@ class ConditionerNetwork(torch.nn.Module):
         if self.precoding:
             y_hat = self.precoding.inv(y_hat)
 
-        # pad final
+        # adjust length and dimensions
         y_hat = torch.nn.functional.pad(y_hat, (0, n_samples - y_hat.shape[-1]))
 
         # Return old structure plus text_metrics if used

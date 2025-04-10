@@ -6,7 +6,7 @@ defaults:
   - _self_
   # - override /datamodule: default_NS # updated
   - override /datamodule: default_NS_full # updated
-  - override /model: default_NS # updated2
+  - override /model: default_NS # default_NS # updated2
   - override /trainer: default
 
 trainer:

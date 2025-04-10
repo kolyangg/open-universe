@@ -68,10 +68,13 @@ from .mdn import MixtureDensityNetworkLoss
 # from .textencoder_plbert_op2 import TextEncoder
 
 
-# DEFAULT
+# # DEFAULT
 # from .score import ScoreNetwork
-# from .condition import ConditionerNetwork ### Cross-attention only (no FILM)
+# from .condition import ConditionerNetwork
 # from .universe_gan_NS import UniverseGAN
+
+# from .condition_NS_plbert_adj import ConditionerNetwork 
+# from .universe_gan_NS2_adj import UniverseGAN
 
 # # ### PL-BERT UPDATED - TEXT FEATURES IN MORE PLACES (06 APR)
 # from .condition_NS_plbert3 import ConditionerNetwork ### Cross-attention only (no FILM)
@@ -80,14 +83,14 @@ from .mdn import MixtureDensityNetworkLoss
 # from .score3 import ScoreNetwork
 
 # # ### REVERTING OLD VERSION MB GOOD (08 APR)
-# from .condition_NS_plbert import ConditionerNetwork ### Cross-attention only (no FILM)
+# from .condition_NS_plbert import ConditionerNetwork
 # from .universe_gan_NS2 import UniverseGAN
 # from .textencoder_plbert_op import TextEncoder
 # from .score import ScoreNetwork
 
 
-# # ### REVERTING OLD VERSION MB GOOD (08 APR) - TRYING TO FIX TRAINING PROCESS
-from .condition_NS_plbert_adj import ConditionerNetwork ### Cross-attention only (no FILM)
+# # ### REVERTING OLD VERSION MB GOOD (09 APR) - TRYING TO FIX TRAINING PROCESS
+from .condition_NS_plbert_adj import ConditionerNetwork 
 from .universe_gan_NS2_adj import UniverseGAN
 from .textencoder_plbert_op import TextEncoder
 from .score import ScoreNetwork

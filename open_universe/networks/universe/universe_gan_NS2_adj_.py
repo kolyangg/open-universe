@@ -22,7 +22,8 @@ from omegaconf import OmegaConf
 from .. import bigvgan as gan
 from .blocks import PReLU_Conv
 # Import the "Universe" or any base class you use:
-from .universe_NS_adj import Universe  # The same base as old code.
+# from .universe_NS_adj import Universe  # The same base as old code.
+from .universe_NS import Universe  # The same base as old code.
 
 log = logging.getLogger(__name__)
 
