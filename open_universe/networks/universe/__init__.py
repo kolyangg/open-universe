@@ -90,7 +90,16 @@ from .mdn import MixtureDensityNetworkLoss
 
 
 # # ### REVERTING OLD VERSION MB GOOD (09 APR) - TRYING TO FIX TRAINING PROCESS
-from .condition_NS_plbert_adj import ConditionerNetwork 
+# # from .condition_NS_plbert_adj import ConditionerNetwork 
+# from .condition_NS_plbert_adj_clean import ConditionerNetwork 
+# from .universe_gan_NS2_adj import UniverseGAN
+# from .textencoder_plbert_op import TextEncoder
+# from .score import ScoreNetwork
+
+
+# # 10 Apr version = 09 Apr + new position for TextConditionoer (at end of ConditionerEncoder)
+# from .condition_NS_plbert_adj import ConditionerNetwork 
+from .condition_NS_plbert_adj_clean_ce import ConditionerNetwork 
 from .universe_gan_NS2_adj import UniverseGAN
 from .textencoder_plbert_op import TextEncoder
 from .score import ScoreNetwork
