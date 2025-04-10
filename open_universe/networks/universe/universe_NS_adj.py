@@ -503,6 +503,7 @@ class Universe(pl.LightningModule):
         t_min=0.0,
         t_max=1.0,
         rng=None,
+        text = None ## NEW WITH TEXT ENCODER ###
     ):
         mix_trans = self.transform(mix)
         tgt_trans = self.transform(target)
@@ -522,7 +523,22 @@ class Universe(pl.LightningModule):
         x_t = tgt_trans + sigma[:, None, None] * z
 
         # run computations
-        cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True)
+        # cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True)
+        
+        if self.have_text:
+            # THIS LINE CHANGES - Store the result which now includes text_metrics
+            result = self.condition_model(mix_trans, x_wav=mix, text=text, train=True)
+            if len(result) == 4:  # With text metrics
+                cond, y_est, h_est, text_metrics = result
+                # Store metrics for later use in training_step
+                self.text_metrics = text_metrics
+            else:
+                cond, y_est, h_est = result
+                self.text_metrics = {}
+        else:
+            cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True)
+            self.text_metrics = {}
+
 
         if self.detach_cond:
             cond = [c.detach() for c in cond]
@@ -685,7 +701,7 @@ class Universe(pl.LightningModule):
                     t_min=tb[i],
                     t_max=tb[i + 1],
                     rng=self.rng,
-                    # text=text
+                    text=text ## NEW WITH TEXT ENCODER ###
                 )
             else: # same as in original
                 ls = self.compute_losses(
@@ -730,13 +746,25 @@ class Universe(pl.LightningModule):
             self.n_batches_est_done += 1
             # use unnormalized data for enhancement
             if self.have_text:
-                # mix_, target_, text_ = batch[:3] 
-                mix_, target_, text_ = batch # to check if it works (in line with original for non-text)
+                mix_, target_, text_ = batch[:3] 
+                # mix_, target_, text_ = batch # to check if it works (in line with original for non-text)
+                print(f"[VALIDATION DEBUG] Before enhance call, text available: {text is not None}")
+                print(f"[VALIDATION DEBUG] Text sample: {text[0] if text is not None else 'None'}")
                 est = self.enhance(mix_, rng=self.rng, text=text_)
             else:
                 # mix_, target_ = batch[:2]
                 mix_, target_ = batch # to check if it works (per original)
+                print(f"[VALIDATION DEBUG] Before enhance call, not using text")
                 est = self.enhance(mix_, rng=self.rng)
+            
+            # Log validation text metrics
+            if self.have_text and hasattr(self, 'text_metrics') and self.text_metrics:
+                for k, v in self.text_metrics.items():
+                    if isinstance(v, (int, float)):
+                        self.log(f"val_text_checks/{k}", v, on_epoch=True, sync_dist=True, batch_size=batch_size)
+                    elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
+                        for i, pos in enumerate(v):
+                            self.log(f"val_text_checks/top_attended_{i}", pos, on_epoch=True, sync_dist=True, batch_size=batch_size)
 
             # log val losses
             for name, loss in self.enh_losses.items():
