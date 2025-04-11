@@ -97,9 +97,17 @@ from .mdn import MixtureDensityNetworkLoss
 # from .score import ScoreNetwork
 
 
-# # 10 Apr version = 09 Apr + new position for TextConditionoer (at end of ConditionerEncoder)
+# # # 10 Apr version = 09 Apr + new position for TextConditionoer (at end of ConditionerEncoder)
+# # from .condition_NS_plbert_adj import ConditionerNetwork 
+# from .condition_NS_plbert_adj_clean_ce import ConditionerNetwork 
+# from .universe_gan_NS2_adj import UniverseGAN
+# from .textencoder_plbert_op import TextEncoder
+# from .score import ScoreNetwork
+
+
+# # 11 Apr version: changing TextEncoder and CrossAttention dims to 512
 # from .condition_NS_plbert_adj import ConditionerNetwork 
-from .condition_NS_plbert_adj_clean_ce import ConditionerNetwork 
+from .condition_NS_plbert_adj_clean_ce_512 import ConditionerNetwork 
 from .universe_gan_NS2_adj import UniverseGAN
 from .textencoder_plbert_op import TextEncoder
 from .score import ScoreNetwork

@@ -353,6 +353,9 @@ class TextConditioner(torch.nn.Module):
         # Instantiate user-provided text encoder (PL-BERT, etc.)
         self.text_encoder = instantiate(text_encoder_config, _recursive_=False)
         print("[DEBUG] TextEncoder instantiated from config:", self.text_encoder)
+        
+        self.cross_attention_dim = cross_attention_dim
+        self.total_channels = total_channels
 
         # FiLM
         self.film_global = FiLM(
@@ -388,14 +391,25 @@ class TextConditioner(torch.nn.Module):
         global_emb, seq_emb = self.text_encoder(text)
         # 2) FiLM on x_mel
         x_mel_t = x_mel.transpose(1, 2)  # => [B, T_mel, 512]
-        x_mel_t, film_info = self.film_global(x_mel_t, global_emb)
+        
+        x_mel_t, film_info = self.film_global(x_mel_t, global_emb) # add Linear layer if dims are different
         text_metrics.update(film_info)
 
         # 3) Cross-attn
-        x_mel_attn = self.mel_to_attn(x_mel_t)   # => [B, T_mel, cross_attention_dim]
+        # print(f"[DEBUG DIM] total_channels: {self.total_channels}, cross_attention_dim: {self.cross_attention_dim}")
+        if self.total_channels != self.cross_attention_dim:
+            x_mel_attn = self.mel_to_attn(x_mel_t)   # => [B, T_mel, cross_attention_dim]
+        else:
+            x_mel_attn = x_mel_t
+        
         x_mel_attn, attn_info = self.cross_attention(x_mel_attn, seq_emb)
         text_metrics.update(attn_info)
-        x_mel_t = self.attn_to_mel(x_mel_attn)   # => [B, T_mel, 512]
+        
+        # print(f"[DEBUG DIM] total_channels: {self.total_channels}, cross_attention_dim: {self.cross_attention_dim}")
+        if self.total_channels != self.cross_attention_dim:
+            x_mel_t = self.attn_to_mel(x_mel_attn)   # => [B, T_mel, 512]
+        else:
+            x_mel_t = x_mel_attn
 
         # 4) L2 norm
         x_mel_norm = (x_mel_t.transpose(1,2)**2).sum(dim=-2, keepdim=True).mean(dim=-1, keepdim=True).sqrt()
@@ -450,8 +464,8 @@ class ConditionerNetwork(torch.nn.Module):
         use_antialiasing=False,
         # New text config
         text_encoder_config=None,  # If None => skip text logic
-        film_global_dim=256,       # dimension for global text embedding # 512 is better here
-        cross_attention_dim=256    # dimension for cross-attn # 512 is better here
+        film_global_dim=512,  # 256      # dimension for global text embedding # 512 is better here
+        cross_attention_dim=512 # 256    # dimension for cross-attn # 512 is better here
     ):
         super().__init__()
         self.input_conv = cond_weight_norm(

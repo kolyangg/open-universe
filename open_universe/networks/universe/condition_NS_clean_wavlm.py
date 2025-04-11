@@ -14,6 +14,9 @@ import torch
 import torchaudio
 from hydra.utils import instantiate
 
+from transformers import WavLMModel, WavLMFeatureExtractor
+import torch.nn.functional as F
+
 from .blocks import (
     BinomialAntiAlias,
     ConvBlock,
@@ -417,6 +420,72 @@ class TextConditioner(torch.nn.Module):
         text_metrics["feature_difference"] = (x_mel - x_mel_orig).abs().mean().item()
 
         return x_mel, text_metrics
+    
+
+# ----------------------------------------------------------------------
+#  NEW WAVLM Adapter
+#  (instead of MelAdapter)
+# ----------------------------------------------------------------------
+
+
+class WavLMAdapter(torch.nn.Module):
+    def __init__(
+        self, 
+        output_channels,
+        ds_factor,
+        oversample=2,
+        use_weight_norm=False
+    ):
+        super().__init__()
+        self.ds_factor = ds_factor
+        
+        # Initialize WavLM and its feature extractor
+        self.processor = WavLMFeatureExtractor.from_pretrained("microsoft/wavlm-base")
+        self.wavlm = WavLMModel.from_pretrained("microsoft/wavlm-base")
+
+        # Same conv + conv_block as your original MelAdapter
+        self.conv = cond_weight_norm(
+            torch.nn.Conv1d(768, output_channels, kernel_size=3, padding="same"),
+            use=use_weight_norm
+        )
+        self.conv_block = ConvBlock(output_channels, use_weight_norm=use_weight_norm)
+
+        # Match the original padding logic
+        n_fft = oversample * ds_factor
+        pad_tot = n_fft - ds_factor
+        self.pad_left, self.pad_right = pad_tot // 2, pad_tot - pad_tot // 2
+
+    def compute_wavlm_features(self, x):
+        # x is assumed to be shape [B, 1, T]
+        r = x.shape[-1] % self.ds_factor
+        pad_amount = self.ds_factor - r if r != 0 else 0
+        x = F.pad(x, (self.pad_left, pad_amount + self.pad_right))  # [B, 1, T + pad]
+
+        # Flatten channel for WavLM
+        x = x.squeeze(1)  # [B, T']
+
+        # Use the processor to pad/prepare inputs
+        inputs = self.processor(
+            x, sampling_rate=24000, return_tensors="pt", padding=True
+        )
+        with torch.no_grad():
+            # Forward through WavLM
+            hidden = self.wavlm(inputs.input_values).last_hidden_state  # [B, frames, 768]
+
+        # Transpose so that we have [B, 768, frames]
+        hidden = hidden.transpose(1, 2)
+
+        # Simple global normalization, matching original
+        norm = (hidden**2).sum(dim=-2, keepdim=True).mean(dim=-1, keepdim=True).sqrt()
+        hidden = hidden / norm.clamp(min=1e-5)
+        return hidden
+
+    def forward(self, x):
+        x = self.compute_wavlm_features(x)
+        x = self.conv(x)
+        x, *_ = self.conv_block(x)
+        return x
+
 
 
 # ----------------------------------------------------------------------
@@ -450,8 +519,8 @@ class ConditionerNetwork(torch.nn.Module):
         use_antialiasing=False,
         # New text config
         text_encoder_config=None,  # If None => skip text logic
-        film_global_dim=256,       # dimension for global text embedding # 512 is better here
-        cross_attention_dim=256    # dimension for cross-attn # 512 is better here
+        film_global_dim=256,       # dimension for global text embedding
+        cross_attention_dim=256    # dimension for cross-attn
     ):
         super().__init__()
         self.input_conv = cond_weight_norm(
@@ -509,6 +578,8 @@ class ConditionerNetwork(torch.nn.Module):
         # ----------------------------------------------------
         # Now handle text logic by creating a TextConditioner or not
         # ----------------------------------------------------
+        text_encoder_config = None ### TEMP TO DISABLE TEXT FEATURES ###     
+        
         if text_encoder_config is not None:
             self.text_conditioner = TextConditioner(
                 text_encoder_config,
