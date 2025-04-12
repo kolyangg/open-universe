@@ -334,6 +334,8 @@ class Universe(pl.LightningModule):
             result = self.condition_model(mix, x_wav=mix_wav, text=text, train=True)
             if isinstance(result, tuple) and len(result) == 4:
                 cond, aux_signal, aux_latent, _ = result  # ignoring text_metrics
+            if isinstance(result, tuple) and len(result) == 5:
+                cond, aux_signal, aux_latent, _, _ = result  # ignoring text_metrics
             else:
                 cond, aux_signal, aux_latent = result
         else:
@@ -532,6 +534,13 @@ class Universe(pl.LightningModule):
                 cond, y_est, h_est, text_metrics = result
                 # Store metrics for later use in training_step
                 self.text_metrics = text_metrics
+                
+            if len(result) == 5:  # With text metrics
+                cond, y_est, h_est, text_metrics1, text_metrics2 = result
+                # Store metrics for later use in training_step
+                self.text_metrics1 = text_metrics1
+                self.text_metrics2 = text_metrics2
+                
             else:
                 cond, y_est, h_est = result
                 self.text_metrics = {}
@@ -765,6 +774,22 @@ class Universe(pl.LightningModule):
                     elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
                         for i, pos in enumerate(v):
                             self.log(f"val_text_checks/top_attended_{i}", pos, on_epoch=True, sync_dist=True, batch_size=batch_size)
+            
+            if self.have_text and hasattr(self, 'text_metrics1') and self.text_metrics1:
+                for k, v in self.text_metrics1.items():
+                    if isinstance(v, (int, float)):
+                        self.log(f"val_text_checks1/{k}", v, on_epoch=True, sync_dist=True, batch_size=batch_size)
+                    elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
+                        for i, pos in enumerate(v):
+                            self.log(f"val_text_checks1/top_attended_{i}", pos, on_epoch=True, sync_dist=True, batch_size=batch_size)
+            
+            if self.have_text and hasattr(self, 'text_metrics2') and self.text_metrics2:
+                for k, v in self.text_metrics2.items():
+                    if isinstance(v, (int, float)):
+                        self.log(f"val_text_checks2/{k}", v, on_epoch=True, sync_dist=True, batch_size=batch_size)
+                    elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
+                        for i, pos in enumerate(v):
+                            self.log(f"val_text_checks2/top_attended_{i}", pos, on_epoch=True, sync_dist=True, batch_size=batch_size)
 
             # log val losses
             for name, loss in self.enh_losses.items():

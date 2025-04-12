@@ -111,6 +111,8 @@ class UniverseGAN(Universe):
         # [DEBUG] If you want to control text usage externally, you could do:
         # self.have_text = True  # or read from config
         # but we'll detect it per-batch in training_step below.
+        
+        self.debug_print= False
 
     def init_losses(self, score_model, condition_model, losses, training):
         """Initialize the GAN losses here."""
@@ -234,13 +236,31 @@ class UniverseGAN(Universe):
                     elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
                         for i, pos in enumerate(v):
                             self.log(f"text_checks/top_attended_{i}", pos, batch_size=mix.shape[0], **self.log_kwargs)
+            
+            if len(result) == 5:
+                cond, y_est, _, text_metrics1, text_metrics2 = result
+                # Log text debug metrics just like in new code
+                for k, v in text_metrics1.items():
+                    if isinstance(v, (int, float)):
+                        self.log(f"text_checks1/{k}", v, batch_size=mix.shape[0], **self.log_kwargs)
+                    elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
+                        for i, pos in enumerate(v):
+                            self.log(f"text_checks1/top_attended_{i}", pos, batch_size=mix.shape[0], **self.log_kwargs)
+                
+                for k, v in text_metrics2.items():
+                    if isinstance(v, (int, float)):
+                        self.log(f"text_checks2/{k}", v, batch_size=mix.shape[0], **self.log_kwargs)
+                    elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
+                        for i, pos in enumerate(v):
+                            self.log(f"text_checks2/top_attended_{i}", pos, batch_size=mix.shape[0], **self.log_kwargs)
             else:
                 cond, y_est, _ = result
             print("[DEBUG] Text-based conditioning active in training_step.")
         else:
             # old code: just call condition_model with no text
             cond, y_est, _ = self.condition_model(mix, train=True)
-            print("[DEBUG] No text => old conditioning path in training_step.")
+            if self.debug_print:
+                print("[DEBUG] No text => old conditioning path in training_step.")
 
         if self.detach_cond:
             cond = [c.detach() for c in cond]

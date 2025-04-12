@@ -105,12 +105,26 @@ from .mdn import MixtureDensityNetworkLoss
 # from .score import ScoreNetwork
 
 
-# # 11 Apr version: changing TextEncoder and CrossAttention dims to 512
-# from .condition_NS_plbert_adj import ConditionerNetwork 
-from .condition_NS_plbert_adj_clean_ce_512 import ConditionerNetwork 
+# # # 11 Apr version: changing TextEncoder and CrossAttention dims to 512
+# from .condition_NS_plbert_adj_clean_ce_512 import ConditionerNetwork 
+# from .universe_gan_NS2_adj import UniverseGAN
+# from .textencoder_plbert_op import TextEncoder
+# from .score import ScoreNetwork
+
+# # 12 Apr version: 512 dims + two blocks for TextEncoder (initial + at end of CE)
+from .condition_NS_plbert_adj_clean_2x_512 import ConditionerNetwork 
 from .universe_gan_NS2_adj import UniverseGAN
 from .textencoder_plbert_op import TextEncoder
 from .score import ScoreNetwork
+
+
+# # # Trying WavLM
+# # from .condition_NS_plbert_adj import ConditionerNetwork 
+# from .condition_wv import ConditionerNetwork 
+# # from .condition_check import ConditionerNetwork 
+# from .universe_gan_NS2_adj import UniverseGAN
+# from .textencoder_plbert_op import TextEncoder
+# from .score import ScoreNetwork
 
 
 

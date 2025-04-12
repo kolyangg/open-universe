@@ -5,7 +5,7 @@ train:
         pin_memory: true
         num_workers: 12 # 24 # 6
         shuffle: true
-        batch_size: 15 # 15 # 15 # 8 # 10  # == 40 with 4 GPUs
+        batch_size: 8 # 15 # 15 # 8 # 10  # == 40 with 4 GPUs
 val:
     dataset: vb-val-16k
     dl_opts:
@@ -25,7 +25,7 @@ datasets:
     vb-train-16k:
         _target_: open_universe.datasets.NoisyDataset
         audio_path: data/voicebank_demand/16k
-        text_path: data/voicebank_demand/trainset_28spk_txt  # NEW: path to transcript files
+        # text_path: data/voicebank_demand/trainset_28spk_txt  # NEW: path to transcript files
         # audio_path: ../../data/voicebank_demand/16k
         # text_path: ../../data/voicebank_demand/trainset_28spk_txt  # NEW: path to transcript files
         fs: 16000
@@ -36,7 +36,7 @@ datasets:
     vb-val-16k: # NORMAL
         _target_: open_universe.datasets.NoisyDataset
         audio_path: ${..vb-train-16k.audio_path}
-        text_path: ${..vb-train-16k.text_path}  # Re-use the same text_path
+        # text_path: ${..vb-train-16k.text_path}  # Re-use the same text_path
         fs: ${..vb-train-16k.fs}
         split: val
         audio_len: null

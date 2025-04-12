@@ -14,9 +14,6 @@ import torch
 import torchaudio
 from hydra.utils import instantiate
 
-from transformers import WavLMModel, AutoFeatureExtractor 
-import torch.nn.functional as F
-
 from .blocks import (
     BinomialAntiAlias,
     ConvBlock,
@@ -356,6 +353,9 @@ class TextConditioner(torch.nn.Module):
         # Instantiate user-provided text encoder (PL-BERT, etc.)
         self.text_encoder = instantiate(text_encoder_config, _recursive_=False)
         print("[DEBUG] TextEncoder instantiated from config:", self.text_encoder)
+        
+        self.cross_attention_dim = cross_attention_dim
+        self.total_channels = total_channels
 
         # FiLM
         self.film_global = FiLM(
@@ -391,14 +391,25 @@ class TextConditioner(torch.nn.Module):
         global_emb, seq_emb = self.text_encoder(text)
         # 2) FiLM on x_mel
         x_mel_t = x_mel.transpose(1, 2)  # => [B, T_mel, 512]
-        x_mel_t, film_info = self.film_global(x_mel_t, global_emb)
+        
+        x_mel_t, film_info = self.film_global(x_mel_t, global_emb) # add Linear layer if dims are different
         text_metrics.update(film_info)
 
         # 3) Cross-attn
-        x_mel_attn = self.mel_to_attn(x_mel_t)   # => [B, T_mel, cross_attention_dim]
+        # print(f"[DEBUG DIM] total_channels: {self.total_channels}, cross_attention_dim: {self.cross_attention_dim}")
+        if self.total_channels != self.cross_attention_dim:
+            x_mel_attn = self.mel_to_attn(x_mel_t)   # => [B, T_mel, cross_attention_dim]
+        else:
+            x_mel_attn = x_mel_t
+        
         x_mel_attn, attn_info = self.cross_attention(x_mel_attn, seq_emb)
         text_metrics.update(attn_info)
-        x_mel_t = self.attn_to_mel(x_mel_attn)   # => [B, T_mel, 512]
+        
+        # print(f"[DEBUG DIM] total_channels: {self.total_channels}, cross_attention_dim: {self.cross_attention_dim}")
+        if self.total_channels != self.cross_attention_dim:
+            x_mel_t = self.attn_to_mel(x_mel_attn)   # => [B, T_mel, 512]
+        else:
+            x_mel_t = x_mel_attn
 
         # 4) L2 norm
         x_mel_norm = (x_mel_t.transpose(1,2)**2).sum(dim=-2, keepdim=True).mean(dim=-1, keepdim=True).sqrt()
@@ -420,72 +431,6 @@ class TextConditioner(torch.nn.Module):
         text_metrics["feature_difference"] = (x_mel - x_mel_orig).abs().mean().item()
 
         return x_mel, text_metrics
-    
-
-# ----------------------------------------------------------------------
-#  NEW WAVLM Adapter
-#  (instead of MelAdapter)
-# ----------------------------------------------------------------------
-
-
-class WavLMAdapter(torch.nn.Module):
-    def __init__(
-        self, 
-        output_channels,
-        ds_factor,
-        oversample=2,
-        use_weight_norm=False
-    ):
-        super().__init__()
-        self.ds_factor = ds_factor
-        
-        # Initialize WavLM and its feature extractor
-        self.processor = AutoFeatureExtractor.from_pretrained("microsoft/wavlm-base")
-        self.wavlm = WavLMModel.from_pretrained("microsoft/wavlm-base")
-
-        # Same conv + conv_block as your original MelAdapter
-        self.conv = cond_weight_norm(
-            torch.nn.Conv1d(768, output_channels, kernel_size=3, padding="same"),
-            use=use_weight_norm
-        )
-        self.conv_block = ConvBlock(output_channels, use_weight_norm=use_weight_norm)
-
-        # Match the original padding logic
-        n_fft = oversample * ds_factor
-        pad_tot = n_fft - ds_factor
-        self.pad_left, self.pad_right = pad_tot // 2, pad_tot - pad_tot // 2
-
-    def compute_wavlm_features(self, x):
-        # x is assumed to be shape [B, 1, T]
-        r = x.shape[-1] % self.ds_factor
-        pad_amount = self.ds_factor - r if r != 0 else 0
-        x = F.pad(x, (self.pad_left, pad_amount + self.pad_right))  # [B, 1, T + pad]
-
-        # Flatten channel for WavLM
-        x = x.squeeze(1)  # [B, T']
-
-        # Use the processor to pad/prepare inputs
-        inputs = self.processor(
-            x, sampling_rate=24000, return_tensors="pt", padding=True
-        )
-        with torch.no_grad():
-            # Forward through WavLM
-            hidden = self.wavlm(inputs.input_values).last_hidden_state  # [B, frames, 768]
-
-        # Transpose so that we have [B, 768, frames]
-        hidden = hidden.transpose(1, 2)
-
-        # Simple global normalization, matching original
-        norm = (hidden**2).sum(dim=-2, keepdim=True).mean(dim=-1, keepdim=True).sqrt()
-        hidden = hidden / norm.clamp(min=1e-5)
-        return hidden
-
-    def forward(self, x):
-        x = self.compute_wavlm_features(x)
-        x = self.conv(x)
-        x, *_ = self.conv_block(x)
-        return x
-
 
 
 # ----------------------------------------------------------------------
@@ -519,8 +464,8 @@ class ConditionerNetwork(torch.nn.Module):
         use_antialiasing=False,
         # New text config
         text_encoder_config=None,  # If None => skip text logic
-        film_global_dim=256,       # dimension for global text embedding
-        cross_attention_dim=256    # dimension for cross-attn
+        film_global_dim=512,  # 256      # dimension for global text embedding # 512 is better here
+        cross_attention_dim=512 # 256    # dimension for cross-attn # 512 is better here
     ):
         super().__init__()
         self.input_conv = cond_weight_norm(
@@ -578,10 +523,14 @@ class ConditionerNetwork(torch.nn.Module):
         # ----------------------------------------------------
         # Now handle text logic by creating a TextConditioner or not
         # ----------------------------------------------------
-        text_encoder_config = None ### TEMP TO DISABLE TEXT FEATURES ###     
-        
         if text_encoder_config is not None:
             self.text_conditioner = TextConditioner(
+                text_encoder_config,
+                film_global_dim,
+                cross_attention_dim,
+                total_channels
+            )
+            self.text_conditioner2 = TextConditioner(
                 text_encoder_config,
                 film_global_dim,
                 cross_attention_dim,
@@ -615,6 +564,15 @@ class ConditionerNetwork(torch.nn.Module):
             and text is not None
             and any(t.strip() for t in text)
         )
+        
+        ##### TextConditioner - right after MelAdapter #####
+        if use_text:
+            # Call the new TextConditioner class
+            x_mel, text_metrics1 = self.text_conditioner(x_mel, text)
+        else:
+            # old path => do nothing special, x_mel remains as is
+            print("[DEBUG] No text => old conditioning path in condition_plbert.")
+        ##### TextConditioner - right after MelAdapter #####
 
             
         if self.precoding:
@@ -628,7 +586,7 @@ class ConditionerNetwork(torch.nn.Module):
         ##### TextConditioner - right at end of ConditionerEncoder (right after it) #####
         if use_text:
             # Call the new TextConditioner class
-            h, text_metrics = self.text_conditioner(h, text)
+            h, text_metrics2 = self.text_conditioner2(h, text)
         else:
             # old path => do nothing special, x_mel remains as is
             print("[DEBUG] No text => old conditioning path in condition_plbert.")
@@ -649,11 +607,13 @@ class ConditionerNetwork(torch.nn.Module):
         # Return old structure plus text_metrics if used
         if train:
             if use_text:
-                return conditions, y_hat, h, text_metrics
+                # return conditions, y_hat, h, text_metrics
+                return conditions, y_hat, h, text_metrics1, text_metrics2
             else:
                 return conditions, y_hat, h
         else:
             if use_text:
-                return conditions, text_metrics
+                # return conditions, text_metrics
+                return conditions, text_metrics1, text_metrics2
             else:
                 return conditions
