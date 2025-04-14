@@ -8,7 +8,7 @@ defaults:
 seed: 46762398
 ckpt_path: null
 # ckpt_path: checkpoints/universe/exper/last.ckpt
-# ckpt_path: ./exp/universepp_vb_16k/2025-03-09_01-50-43_/checkpoints/universe/exper/last.ckpt
+# ckpt_path: ./exp/universepp_vb_16k_NS2_wv/2025-04-12_18-31-56_/checkpoints/universe/exper/last.ckpt
 train: true
 test: false
 

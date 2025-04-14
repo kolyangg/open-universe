@@ -253,6 +253,7 @@ class Universe(pl.LightningModule):
         ensemble_stat: Optional[str] = "median",
         warm_start: Optional[int] = None,
         text: Optional[torch.Tensor] = None,  # <--- ADDED for text
+        mask: Optional[torch.Tensor] = None,  # <--- ADDED for text
     ) -> torch.Tensor:
         """
         If text is provided, we call condition_model with text. If not, old path.
@@ -331,7 +332,7 @@ class Universe(pl.LightningModule):
             # "new" approach
             # We might do debug logs:
             print(f"[DEBUG] 'enhance' sees text => using text in conditioner.")
-            result = self.condition_model(mix, x_wav=mix_wav, text=text, train=True)
+            result = self.condition_model(mix, x_wav=mix_wav, text=text, mask = mask, train=True)
             if isinstance(result, tuple) and len(result) == 4:
                 cond, aux_signal, aux_latent, _ = result  # ignoring text_metrics
             elif isinstance(result, tuple) and len(result) == 5:
@@ -505,7 +506,8 @@ class Universe(pl.LightningModule):
         t_min=0.0,
         t_max=1.0,
         rng=None,
-        text = None ## NEW WITH TEXT ENCODER ###
+        text = None, ## NEW WITH TEXT ENCODER ###
+        mask = None ## NEW WITH TEXT ENCODER ###
     ):
         mix_trans = self.transform(mix)
         tgt_trans = self.transform(target)
@@ -529,7 +531,7 @@ class Universe(pl.LightningModule):
         
         if self.have_text:
             # THIS LINE CHANGES - Store the result which now includes text_metrics
-            result = self.condition_model(mix_trans, x_wav=mix, text=text, train=True)
+            result = self.condition_model(mix_trans, x_wav=mix, text=text, mask = mask, train=True)
             if len(result) == 4:  # With text metrics
                 cond, y_est, h_est, text_metrics = result
                 # Store metrics for later use in training_step
@@ -542,7 +544,6 @@ class Universe(pl.LightningModule):
                 self.text_metrics2 = text_metrics2
                 
             else:
-                print(len(result))
                 cond, y_est, h_est = result
                 self.text_metrics = {}
         else:

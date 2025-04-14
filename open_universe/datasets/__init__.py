@@ -20,5 +20,5 @@ Author: Robin Scheibler (@fakufaku)
 """
 from .datamodule import DataModule
 # from .static_dataset import NoisyDataset
-# from .static_dataset_NS import NoisyDataset
-from .static_dataset_NS2 import NoisyDataset
+# from .static_dataset_NS2 import NoisyDataset
+from .static_dataset_NS_4sec import NoisyDataset

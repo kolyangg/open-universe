@@ -111,9 +111,16 @@ from .mdn import MixtureDensityNetworkLoss
 # from .textencoder_plbert_op import TextEncoder
 # from .score import ScoreNetwork
 
-# # 12 Apr version: 512 dims + two blocks for TextEncoder (initial + at end of CE)
-from .condition_NS_plbert_adj_clean_2x_512 import ConditionerNetwork 
-from .universe_gan_NS2_adj import UniverseGAN
+# # # 12 Apr version: 512 dims + two blocks for TextEncoder (initial + at end of CE)
+# from .condition_NS_plbert_adj_clean_2x_512 import ConditionerNetwork 
+# from .universe_gan_NS2_adj import UniverseGAN
+# from .textencoder_plbert_op import TextEncoder
+# from .score import ScoreNetwork
+
+
+# 14 Apr version = 10 Apr + using 4 seconds of audio, filtering longer samples and padding shorter ones
+from .condition_NS_plbert_adj_clean_ce_4s import ConditionerNetwork 
+from .universe_gan_NS2_adj_4s import UniverseGAN
 from .textencoder_plbert_op import TextEncoder
 from .score import ScoreNetwork
 

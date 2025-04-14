@@ -22,7 +22,7 @@ from omegaconf import OmegaConf
 from .. import bigvgan as gan
 from .blocks import PReLU_Conv
 # Import the "Universe" or any base class you use:
-from .universe_NS_adj import Universe  # The same base as old code.
+from .universe_NS_adj_4s import Universe  # The same base as old code.
 
 log = logging.getLogger(__name__)
 
@@ -175,7 +175,9 @@ class UniverseGAN(Universe):
         # but might ignore text if not used. We'll do minimal changes:
         if len(batch) >= 3 and isinstance(batch[2], (str, list)):
             # We have a possible text transcript
-            mix_raw, target_raw, text = batch[:3]
+            # mix_raw, target_raw, text = batch[:3]
+            # text_str_list = text if isinstance(text, list) else [text]
+            mix_raw, target_raw, text, mask = batch[:4]
             text_str_list = text if isinstance(text, list) else [text]
             
             # For backward compatibility, we keep the original approach:
@@ -226,7 +228,7 @@ class UniverseGAN(Universe):
         use_text = any(t.strip() for t in text_str_list)
         if use_text:
             # "new" text approach with debug prints
-            result = self.condition_model(mix, text=text_str_list, train=True)
+            result = self.condition_model(mix, text=text_str_list, mask = mask, train=True)
             if len(result) == 4:
                 cond, y_est, _, text_metrics = result
                 # Log text debug metrics just like in new code
