@@ -4,8 +4,8 @@ train:
     dl_opts:
         pin_memory: true
         num_workers: 12 # 24 # 6
-        shuffle: tru # e
-        batch_size: 4 # 8 # 15 # 15 # 8 # 10  # == 40 with 4 GPUs
+        shuffle: true
+        batch_size: 8 # 8 # 15 # 15 # 8 # 10  # == 40 with 4 GPUs
 val:
     dataset: vb-val-16k
     dl_opts:
