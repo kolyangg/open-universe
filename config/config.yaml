@@ -6,10 +6,10 @@ defaults:
     - experiment: default
 
 seed: 46762398
-# ckpt_path: null
+ckpt_path: null
 # ckpt_path: checkpoints/universe/exper/last.ckpt
 # ckpt_path: ./exp/universepp_vb_16k_NS2_wv/2025-04-12_18-31-56_/checkpoints/universe/exper/last.ckpt
-ckpt_path: ./exp/universepp_vb_16k_NS2_4s/2025-04-14_11-27-04_/checkpoints/universe/exper/last.ckpt
+# ckpt_path: ./exp/universepp_vb_16k_NS2_4s/2025-04-14_11-27-04_/checkpoints/universe/exper/last.ckpt
 train: true
 test: false
 
