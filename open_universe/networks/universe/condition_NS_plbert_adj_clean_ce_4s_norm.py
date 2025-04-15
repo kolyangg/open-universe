@@ -278,6 +278,12 @@ class CrossAttentionBlock(torch.nn.Module):
             torch.nn.Linear(hidden_dim * 4, hidden_dim),
         )
         self.layer_norm_ffn = torch.nn.LayerNorm(hidden_dim)
+        
+        # 1) A small learnable scale to keep residual from blowing up early
+        self.res_scale = torch.nn.Parameter(torch.tensor(0.1)) # 0.5
+        
+        # If you want to clamp:
+        self.max_attn_norm = 50.0
 
     def forward(self, x, cond, x_mask=None, cond_mask=None):
         text_metrics = {}
@@ -287,6 +293,24 @@ class CrossAttentionBlock(torch.nn.Module):
             key_padding_mask=cond_mask,
             need_weights=True
         )
+        
+        # 1) optional clamp
+        # out_norm = attn_out.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+        # scale_factor = (self.max_attn_norm / out_norm).clamp(max=1.0)
+        # attn_out = attn_out * scale_factor
+        
+        # shape is [B, T, hidden_dim]
+        attn_out_flat = attn_out.reshape(attn_out.size(0), -1)  # [B, T*hidden_dim]
+        out_norm = attn_out_flat.norm(dim=1, keepdim=True).clamp(min=1e-6)  # [B, 1]
+        scale_factor = (self.max_attn_norm / out_norm).clamp(max=1.0)       # e.g. 50.0 / out_norm
+        # broadcast + reshape back
+        attn_out_flat = attn_out_flat * scale_factor
+        attn_out = attn_out_flat.reshape_as(attn_out)
+        
+        # 2) Multiply by res_scale
+        attn_out = attn_out * self.res_scale
+        
+        
         max_attentions = attn_weights.max(dim=-1)[0]
         print(f"[DEBUG] Attention focus: {max_attentions.mean().item():.4f}")
         print(f"[DEBUG] Attention weights stats: "
@@ -305,11 +329,33 @@ class CrossAttentionBlock(torch.nn.Module):
             print(f"[DEBUG] Top {top_k} attended positions: {top_indices.tolist()}")
             text_metrics["top_attended_positions"] = top_indices.tolist()
 
-        x = x + attn_out
+        #x = x + attn_out
+        
+        # clamp or scale after residual
+        res = x + attn_out
+        res_flat = res.reshape(res.size(0), -1)
+        res_norm = res_flat.norm(dim=1, keepdim=True).clamp(min=1e-6)
+        scale_factor = (self.max_attn_norm / res_norm).clamp(max=1.0)
+        res_flat = res_flat * scale_factor
+        x = res_flat.reshape_as(res)
+        
+        
         x = self.layer_norm(x)
         ffn_out = self.ffn(x)
+        
+        out_norm = ffn_out.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+        scale_factor = (self.max_attn_norm / out_norm).clamp(max=1.0)
+        ffn_out = ffn_out * scale_factor
+
+        # # (optional) scale again if needed
+        # ffn_out = ffn_out * self.res_scale
+                
+        
         x = x + ffn_out
         x = self.layer_norm_ffn(x)
+        
+        # store a debug metric
+        text_metrics["res_scale"] = self.res_scale.item()
 
         return x, text_metrics
 
@@ -386,16 +432,59 @@ class TextConditioner(torch.nn.Module):
         
         # 1) Encode text => (global_emb, seq_emb)
         global_emb, seq_emb = self.text_encoder(text)
+        
+        # Debug prints
+        global_emb_norm = global_emb.norm(dim=1).mean().item()
+        seq_emb_norm = seq_emb.norm(dim=-1).mean().item()
+        print(f"[DEBUG COND] global_emb avg norm={global_emb_norm}, seq_emb avg norm={seq_emb_norm}")
+        
+        global_emb = torch.nn.functional.normalize(global_emb, dim=1)  
+        seq_emb = torch.nn.functional.normalize(seq_emb, dim=-1)
+        
+        global_emb_norm = global_emb.norm(dim=1).mean().item()
+        seq_emb_norm = seq_emb.norm(dim=-1).mean().item()
+        print(f"[DEBUG COND] Normalized global_emb avg norm={global_emb_norm}, seq_emb avg norm={seq_emb_norm}")
+        
         # 2) FiLM on x_mel
         x_mel_t = x_mel.transpose(1, 2)  # => [B, T_mel, 512]
+        
+        
+        # measure FiLM input norm
+        film_in_norm = x_mel_t.reshape(x_mel_t.size(0), -1).norm(dim=1).mean().item()
+        print(f"[DEBUG COND] FiLM input average norm: {film_in_norm:.3f}")
+        text_metrics["film_in_norm"] = film_in_norm
+        
         x_mel_t, film_info = self.film_global(x_mel_t, global_emb)
         text_metrics.update(film_info)
+        
+         # measure FiLM output norm
+        film_out_norm = x_mel_t.reshape(x_mel_t.size(0), -1).norm(dim=1).mean().item()
+        print(f"[DEBUG COND] FiLM output average norm: {film_out_norm:.3f}")
+        text_metrics["film_out_norm"] = film_out_norm
 
         # 3) Cross-attn
         x_mel_attn = self.mel_to_attn(x_mel_t)   # => [B, T_mel, cross_attention_dim]
+        
+        # measure cross-attn input norm
+        attn_in_norm = x_mel_attn.reshape(x_mel_attn.size(0), -1).norm(dim=1).mean().item()
+        print(f"[DEBUG COND] CrossAttn input average norm: {attn_in_norm:.3f}")
+        text_metrics["cross_attn_in_norm"] = attn_in_norm
+        
         x_mel_attn, attn_info = self.cross_attention(x_mel_attn, seq_emb, x_mask = mask)
+        
+        # measure cross-attn output norm
+        attn_out_norm = x_mel_attn.reshape(x_mel_attn.size(0), -1).norm(dim=1).mean().item()
+        text_metrics["cross_attn_out_norm"] = attn_out_norm
+        print(f"[DEBUG COND] CrossAttn out average norm: {attn_out_norm:.3f}")
+     
+        
         text_metrics.update(attn_info)
         x_mel_t = self.attn_to_mel(x_mel_attn)   # => [B, T_mel, 512]
+        
+        # measure after final linear
+        attn_final_norm = x_mel_t.reshape(x_mel_t.size(0), -1).norm(dim=1).mean().item()
+        print(f"[DEBUG COND] CrossAttn final average norm after reshape: {attn_final_norm:.3f}")
+        text_metrics["cross_attn_final_norm"] = attn_final_norm
 
         # 4) L2 norm
         x_mel_norm = (x_mel_t.transpose(1,2)**2).sum(dim=-2, keepdim=True).mean(dim=-1, keepdim=True).sqrt()
@@ -415,8 +504,27 @@ class TextConditioner(torch.nn.Module):
         text_metrics["mel_features_before"] = x_mel_orig.abs().mean().item()
         text_metrics["mel_features_after"] = x_mel.abs().mean().item()
         text_metrics["feature_difference"] = (x_mel - x_mel_orig).abs().mean().item()
+        
+        # measure final output norm
+        cond_out_norm = x_mel.reshape(x_mel.size(0), -1).norm(dim=1).mean().item()
+        text_metrics["cond_out_norm"] = cond_out_norm
+        print(f"[DEBUG COND] Conditioned mel final avg norm: {cond_out_norm:.3f}")
+
+        # measure difference
+        diff_norm = (x_mel - x_mel_orig).norm(dim=1).mean().item()
+        print(f"[DEBUG COND] Conditioned - Original L2 norm per example: {diff_norm:.3f}")
+        text_metrics["feature_difference"] = diff_norm
 
         return x_mel, text_metrics
+
+
+def normalize_mel_features(x_mel, target_norm=100.0):
+    B = x_mel.size(0)
+    x_mel_flat = x_mel.reshape(B, -1)
+    norm_per_sample = x_mel_flat.norm(dim=1, keepdim=True).clamp(min=1e-6)
+    scale_factor = target_norm / norm_per_sample
+    x_mel_flat = x_mel_flat * scale_factor
+    return x_mel_flat.reshape_as(x_mel)
 
 
 # ----------------------------------------------------------------------
@@ -535,6 +643,9 @@ class ConditionerNetwork(torch.nn.Module):
 
         # Compute mel features
         x_mel = self.input_mel(x_wav)  # => [B, total_channels, T_mel]
+        
+        # Normalize x_mel (new)
+        x_mel = normalize_mel_features(x_mel, target_norm=100.0)
 
         text_metrics = {}
         # Decide if we do text logic
@@ -557,6 +668,7 @@ class ConditionerNetwork(torch.nn.Module):
         ##### TextConditioner - right at end of ConditionerEncoder (right after it) #####
         if use_text:
             # Call the new TextConditioner class
+            h = normalize_mel_features(h, target_norm=100.0)
             h, text_metrics = self.text_conditioner(h, text, mask)
         else:
             # old path => do nothing special, x_mel remains as is
@@ -586,4 +698,3 @@ class ConditionerNetwork(torch.nn.Module):
                 return conditions, text_metrics
             else:
                 return conditions
-
