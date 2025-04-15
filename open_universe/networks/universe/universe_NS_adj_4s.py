@@ -691,7 +691,8 @@ class Universe(pl.LightningModule):
         # detect text
         if len(batch) >= 3 and isinstance(batch[2], (str, list, torch.Tensor)):
             self.have_text = True
-            mix_raw, target_raw, text = batch[:3]
+            # mix_raw, target_raw, text = batch[:3]
+            mix_raw, target_raw, text, mask = batch[:4]
         else: # same as in original
             self.have_text = False
             mix_raw, target_raw = batch[:2]
@@ -712,7 +713,8 @@ class Universe(pl.LightningModule):
                     t_min=tb[i],
                     t_max=tb[i + 1],
                     rng=self.rng,
-                    text=text ## NEW WITH TEXT ENCODER ###
+                    text=text, ## NEW WITH TEXT ENCODER ###
+                    mask=mask ## NEW WITH TEXT ENCODER ###
                 )
             else: # same as in original
                 ls = self.compute_losses(

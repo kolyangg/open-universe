@@ -13,6 +13,7 @@ import math
 import torch
 import torchaudio
 from hydra.utils import instantiate
+import torch.nn.functional as F
 
 from .blocks import (
     BinomialAntiAlias,
@@ -273,44 +274,21 @@ class CrossAttentionBlock(torch.nn.Module):
         self.cross_attn = torch.nn.MultiheadAttention(hidden_dim, num_heads, batch_first=True)
         self.layer_norm = torch.nn.LayerNorm(hidden_dim)
         self.ffn = torch.nn.Sequential(
-            torch.nn.Linear(hidden_dim, hidden_dim * 2), # was 4x
+            torch.nn.Linear(hidden_dim, hidden_dim * 4),
             torch.nn.ReLU(),
-            torch.nn.Linear(hidden_dim * 2, hidden_dim), # was 4x
+            torch.nn.Linear(hidden_dim * 4, hidden_dim),
         )
         self.layer_norm_ffn = torch.nn.LayerNorm(hidden_dim)
-        
-        # 1) A small learnable scale to keep residual from blowing up early
-        self.res_scale = torch.nn.Parameter(torch.tensor(0.1)) # 0.5
-        
-        # If you want to clamp:
-        self.max_attn_norm = 300.0 # 50
 
     def forward(self, x, cond, x_mask=None, cond_mask=None):
         text_metrics = {}
 
         attn_out, attn_weights = self.cross_attn(
             x, cond, cond,
-            key_padding_mask=cond_mask,
+            attn_mask = x_mask, # audio-side
+            key_padding_mask = cond_mask, # text
             need_weights=True
         )
-        
-        # 1) optional clamp
-        # out_norm = attn_out.norm(dim=-1, keepdim=True).clamp(min=1e-6)
-        # scale_factor = (self.max_attn_norm / out_norm).clamp(max=1.0)
-        # attn_out = attn_out * scale_factor
-        
-        # shape is [B, T, hidden_dim]
-        attn_out_flat = attn_out.reshape(attn_out.size(0), -1)  # [B, T*hidden_dim]
-        out_norm = attn_out_flat.norm(dim=1, keepdim=True).clamp(min=1e-6)  # [B, 1]
-        scale_factor = (self.max_attn_norm / out_norm).clamp(max=1.0)       # e.g. 50.0 / out_norm
-        # broadcast + reshape back
-        attn_out_flat = attn_out_flat * scale_factor
-        attn_out = attn_out_flat.reshape_as(attn_out)
-        
-        # 2) Multiply by res_scale
-        attn_out = attn_out * self.res_scale
-        
-        
         max_attentions = attn_weights.max(dim=-1)[0]
         print(f"[DEBUG] Attention focus: {max_attentions.mean().item():.4f}")
         print(f"[DEBUG] Attention weights stats: "
@@ -330,41 +308,26 @@ class CrossAttentionBlock(torch.nn.Module):
             text_metrics["top_attended_positions"] = top_indices.tolist()
 
         x = x + attn_out
-        
-        # # clamp or scale after residual
-        # res = x + attn_out
-        # res_flat = res.reshape(res.size(0), -1)
-        # res_norm = res_flat.norm(dim=1, keepdim=True).clamp(min=1e-6)
-        # scale_factor = (self.max_attn_norm / res_norm).clamp(max=1.0)
-        # res_flat = res_flat * scale_factor
-        # x = res_flat.reshape_as(res)
-        
-        
         x = self.layer_norm(x)
         ffn_out = self.ffn(x)
-        
-        # out_norm = ffn_out.norm(dim=-1, keepdim=True).clamp(min=1e-6)
-        # scale_factor = (self.max_attn_norm / out_norm).clamp(max=1.0)
-        # ffn_out = ffn_out * scale_factor
-
-        # # (optional) scale again if needed
-        # ffn_out = ffn_out * self.res_scale
-                
-        
         x = x + ffn_out
         x = self.layer_norm_ffn(x)
-        
-        # store a debug metric
-        text_metrics["res_scale"] = self.res_scale.item()
 
         return x, text_metrics
 
 
 class FiLM(torch.nn.Module):
-    def __init__(self, condition_dim, feature_channels, init_scale=0.1):
+    def __init__(self, condition_dim, feature_channels, init_scale=0.01): # 0.1 before
         super().__init__()
         self.gamma_fc = torch.nn.Linear(condition_dim, feature_channels)
         self.beta_fc = torch.nn.Linear(condition_dim, feature_channels)
+        
+        # NEW FOR LOWER GRAD: Add these lines for explicit initialization
+        torch.nn.init.normal_(self.gamma_fc.weight, mean=0.0, std=0.01)
+        torch.nn.init.zeros_(self.gamma_fc.bias)
+        torch.nn.init.normal_(self.beta_fc.weight, mean=0.0, std=0.01)
+        torch.nn.init.zeros_(self.beta_fc.bias)
+        
         self.scale = torch.nn.Parameter(torch.tensor(init_scale))
 
     def forward(self, x, cond):
@@ -409,6 +372,15 @@ class TextConditioner(torch.nn.Module):
         # Cross-attention
         self.mel_to_attn = torch.nn.Linear(total_channels, cross_attention_dim)
         self.cross_attention = CrossAttentionBlock(cross_attention_dim, num_heads=4)
+        
+        # NEW FOR LOWER GRAD
+        # Add explicit initialization for cross-attention
+        for name, param in self.cross_attention.named_parameters():
+            if 'weight' in name:
+                torch.nn.init.normal_(param, mean=0.0, std=0.01)
+            elif 'bias' in name:
+                torch.nn.init.zeros_(param)
+        
         self.attn_to_mel = torch.nn.Linear(cross_attention_dim, total_channels)
 
         # init
@@ -427,64 +399,148 @@ class TextConditioner(torch.nn.Module):
         Returns the conditioned x_mel and a dictionary of metrics.
         """
         print("[DEBUG] Text conditioning is active in condition_plbert.")
+        print(f"[DEBUG] mask: {mask}")
         text_metrics = {}
         x_mel_orig = x_mel.clone()
         
+        if mask is not None:
+            # Get shapes
+            B, T_mel, _ = x_mel.shape
+        
+            # Get text length safely
+            if hasattr(x_mel, 'shape'):
+                _, T_text, _ = x_mel.shape
+            else:
+                # If cond is a list or other non-tensor
+                T_text = len(x_mel[0]) if isinstance(x_mel, list) and len(x_mel) > 0 else 1
+                
+            # Calculate the approximate downsampling ratio
+            # From audio samples (64000) to mel frames (401)
+            audio_len = mask.shape[1]
+            downsample_ratio = audio_len / T_mel
+            
+            # Reshape for pooling: [B, 1, audio_len]
+            x_mask_reshaped = mask.float().unsqueeze(1)
+            
+            # Use avg_pool1d to downsample the mask
+            # The kernel size should be approximately the downsample ratio
+            kernel_size = int(downsample_ratio)
+            stride = kernel_size
+            
+            # Ensure kernel size is at least 1
+            kernel_size = max(1, kernel_size)
+            
+            # Perform the downsampling
+            downsampled_mask = F.avg_pool1d(
+                x_mask_reshaped, 
+                kernel_size=kernel_size,
+                stride=stride,
+                padding=0
+            )
+            
+            # If the resulting mask isn't exactly the right length, 
+            # use interpolate to fix it
+            if downsampled_mask.shape[2] != T_mel:
+                downsampled_mask = F.interpolate(
+                    downsampled_mask,
+                    size=T_mel,
+                    mode='linear',
+                    align_corners=False
+                )
+            
+            # Convert back to binary mask (1 = keep, 0 = mask)
+            downsampled_mask = (downsampled_mask > 0.5).float()
+            
+            # For PyTorch attention, we need key_padding_mask where True = mask out
+            # Converting [B, 1, T_mel] -> [B, T_mel] and inverting (1->0, 0->1)
+            audio_key_padding_mask = ~(downsampled_mask.squeeze(1).bool())
+            
+            # Debug info
+            print(f"[DEBUG] Downsampled: {audio_key_padding_mask.shape}")
+            
+            
+        
         # 1) Encode text => (global_emb, seq_emb)
-        global_emb, seq_emb = self.text_encoder(text)
-        
-        # Debug prints
-        global_emb_norm = global_emb.norm(dim=1).mean().item()
-        seq_emb_norm = seq_emb.norm(dim=-1).mean().item()
-        print(f"[DEBUG COND] global_emb avg norm={global_emb_norm}, seq_emb avg norm={seq_emb_norm}")
-        
-        global_emb = torch.nn.functional.normalize(global_emb, dim=1)  
-        seq_emb = torch.nn.functional.normalize(seq_emb, dim=-1)
-        
-        global_emb_norm = global_emb.norm(dim=1).mean().item()
-        seq_emb_norm = seq_emb.norm(dim=-1).mean().item()
-        print(f"[DEBUG COND] Normalized global_emb avg norm={global_emb_norm}, seq_emb avg norm={seq_emb_norm}")
+        # global_emb, seq_emb = self.text_encoder(text)
+        global_emb, seq_emb, text_key_mask = self.text_encoder(text)
+        T_text = seq_emb.size(1)
         
         # 2) FiLM on x_mel
         x_mel_t = x_mel.transpose(1, 2)  # => [B, T_mel, 512]
-        
-        
-        # measure FiLM input norm
-        film_in_norm = x_mel_t.reshape(x_mel_t.size(0), -1).norm(dim=1).mean().item()
-        print(f"[DEBUG COND] FiLM input average norm: {film_in_norm:.3f}")
-        text_metrics["film_in_norm"] = film_in_norm
-        
         x_mel_t, film_info = self.film_global(x_mel_t, global_emb)
         text_metrics.update(film_info)
         
-         # measure FiLM output norm
-        film_out_norm = x_mel_t.reshape(x_mel_t.size(0), -1).norm(dim=1).mean().item()
-        print(f"[DEBUG COND] FiLM output average norm: {film_out_norm:.3f}")
-        text_metrics["film_out_norm"] = film_out_norm
+        attn_mask = None
+        if mask is not None:
+            B, audio_len = mask.shape
+            T_mel = x_mel_t.size(1)
+
+            mask = mask.unsqueeze(1).float()  # => [B,1,audio_len]
+            mask_ds = torch.nn.functional.interpolate(
+                mask, size=T_mel, mode='nearest'
+            )  # => [B,1,T_mel]
+            # binarize
+            mask_ds = (mask_ds > 0.5)
+            
+            # invert => True => block
+            mask_ds = ~mask_ds  # shape [B,1,T_mel]
+            
+            # expand to [B,T_mel,T_text], etc. if you want (T_mel,T_text)
+            T_text = seq_emb.size(1)
+            mask_ds = mask_ds.transpose(-2,-1)   # => [B,T_mel,1]
+            attn_mask = mask_ds.expand(-1, T_mel, T_text)  # => [B,T_mel,T_text]
+            
+            n_heads = 4
+            attn_mask = attn_mask.unsqueeze(1).expand(-1, n_heads, -1, -1)
+            # shape => [B, n_heads, T_q, T_k]
+
+            B, _, T_q, T_k = attn_mask.shape
+            attn_mask = attn_mask.reshape(B * n_heads, T_q, T_k)
 
         # 3) Cross-attn
         x_mel_attn = self.mel_to_attn(x_mel_t)   # => [B, T_mel, cross_attention_dim]
         
-        # measure cross-attn input norm
-        attn_in_norm = x_mel_attn.reshape(x_mel_attn.size(0), -1).norm(dim=1).mean().item()
-        print(f"[DEBUG COND] CrossAttn input average norm: {attn_in_norm:.3f}")
-        text_metrics["cross_attn_in_norm"] = attn_in_norm
+        # print(f"[DEBUG] Audio features shape: {x_mel_attn.shape}")
+        # print(f"[DEBUG] Text features shape: {seq_emb.shape}")
+        # print(f"[DEBUG] Audio mask shape: {mask.shape if mask is not None else None}")
+        # print(f"[DEBUG] Text mask shape: {text_key_mask.shape if text_key_mask is not None else None}")
+         
         
-        x_mel_attn, attn_info = self.cross_attention(x_mel_attn, seq_emb, x_mask = mask)
-        
-        # measure cross-attn output norm
-        attn_out_norm = x_mel_attn.reshape(x_mel_attn.size(0), -1).norm(dim=1).mean().item()
-        text_metrics["cross_attn_out_norm"] = attn_out_norm
-        print(f"[DEBUG COND] CrossAttn out average norm: {attn_out_norm:.3f}")
-     
-        
+        # x_mel_attn, attn_info = self.cross_attention(x_mel_attn, seq_emb, x_mask = audio_key_padding_mask, cond_mask = text_key_mask)
+        x_mel_attn, attn_info = self.cross_attention(x_mel_attn, seq_emb, x_mask=attn_mask)
         text_metrics.update(attn_info)
         x_mel_t = self.attn_to_mel(x_mel_attn)   # => [B, T_mel, 512]
         
-        # measure after final linear
-        attn_final_norm = x_mel_t.reshape(x_mel_t.size(0), -1).norm(dim=1).mean().item()
-        print(f"[DEBUG COND] CrossAttn final average norm after reshape: {attn_final_norm:.3f}")
-        text_metrics["cross_attn_final_norm"] = attn_final_norm
+        
+        # if mask:          
+        #     # Now call cross-attention properly:
+        #     x_mel_attn, attn_info = self.cross_attention(
+        #         x_mel_attn, seq_emb, seq_emb,
+        #         cond_mask=text_key_mask,  # For text (keys/values)
+        #         x_mask=None, # attn_mask,  # Not using attn_mask
+        #         need_weights=True
+        #     )
+            
+        #     # Store the mask for logging
+        #     # text_metrics["audio_valid_ratio"] = mask_ds.float().mean().item()
+        # else:
+        #     # No mask provided
+        #     x_mel_attn, attn_info = self.cross_attention(
+        #         x_mel_attn, seq_emb, seq_emb,
+        #         key_padding_mask=text_key_mask,
+        #         need_weights=True
+        #     )
+                        
+
+        # # 3b) Cross-attn with your attn_mask for the query side
+        # x_mel_attn, attn_info = self.cross_attention(
+        #     x_mel_attn, seq_emb, x_mask=attn_mask
+        # )
+        text_metrics.update(attn_info)
+
+        x_mel_t = self.attn_to_mel(x_mel_attn)  # => [B, T_mel, 512]
+        
+        #### NEW SECTION TO FIX MASK ####
 
         # 4) L2 norm
         x_mel_norm = (x_mel_t.transpose(1,2)**2).sum(dim=-2, keepdim=True).mean(dim=-1, keepdim=True).sqrt()
@@ -504,27 +560,8 @@ class TextConditioner(torch.nn.Module):
         text_metrics["mel_features_before"] = x_mel_orig.abs().mean().item()
         text_metrics["mel_features_after"] = x_mel.abs().mean().item()
         text_metrics["feature_difference"] = (x_mel - x_mel_orig).abs().mean().item()
-        
-        # measure final output norm
-        cond_out_norm = x_mel.reshape(x_mel.size(0), -1).norm(dim=1).mean().item()
-        text_metrics["cond_out_norm"] = cond_out_norm
-        print(f"[DEBUG COND] Conditioned mel final avg norm: {cond_out_norm:.3f}")
-
-        # measure difference
-        diff_norm = (x_mel - x_mel_orig).norm(dim=1).mean().item()
-        print(f"[DEBUG COND] Conditioned - Original L2 norm per example: {diff_norm:.3f}")
-        text_metrics["feature_difference"] = diff_norm
 
         return x_mel, text_metrics
-
-
-def normalize_mel_features(x_mel, target_norm=100.0):
-    B = x_mel.size(0)
-    x_mel_flat = x_mel.reshape(B, -1)
-    norm_per_sample = x_mel_flat.norm(dim=1, keepdim=True).clamp(min=1e-6)
-    scale_factor = target_norm / norm_per_sample
-    x_mel_flat = x_mel_flat * scale_factor
-    return x_mel_flat.reshape_as(x_mel)
 
 
 # ----------------------------------------------------------------------
@@ -643,9 +680,6 @@ class ConditionerNetwork(torch.nn.Module):
 
         # Compute mel features
         x_mel = self.input_mel(x_wav)  # => [B, total_channels, T_mel]
-        
-        # Normalize x_mel (new)
-        # x_mel = normalize_mel_features(x_mel, target_norm=100.0)
 
         text_metrics = {}
         # Decide if we do text logic
@@ -668,7 +702,6 @@ class ConditionerNetwork(torch.nn.Module):
         ##### TextConditioner - right at end of ConditionerEncoder (right after it) #####
         if use_text:
             # Call the new TextConditioner class
-            # h = normalize_mel_features(h, target_norm=100.0)
             h, text_metrics = self.text_conditioner(h, text, mask)
         else:
             # old path => do nothing special, x_mel remains as is
@@ -698,3 +731,4 @@ class ConditionerNetwork(torch.nn.Module):
                 return conditions, text_metrics
             else:
                 return conditions
+
