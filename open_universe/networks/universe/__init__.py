@@ -68,10 +68,10 @@ from .mdn import MixtureDensityNetworkLoss
 # from .textencoder_plbert_op2 import TextEncoder
 
 
-# # DEFAULT
-# from .score import ScoreNetwork
-# from .condition import ConditionerNetwork
-# from .universe_gan_NS import UniverseGAN
+# DEFAULT
+from .score import ScoreNetwork
+from .condition import ConditionerNetwork
+from .universe_gan_NS import UniverseGAN
 
 # from .condition_NS_plbert_adj import ConditionerNetwork 
 # from .universe_gan_NS2_adj import UniverseGAN
@@ -118,11 +118,11 @@ from .mdn import MixtureDensityNetworkLoss
 # from .score import ScoreNetwork
 
 
-# 14 Apr version = 10 Apr + using 4 seconds of audio, filtering longer samples and padding shorter ones
-from .condition_NS_plbert_adj_clean_ce_4s import ConditionerNetwork 
-from .universe_gan_NS2_adj_4s import UniverseGAN
-from .textencoder_plbert_op import TextEncoder
-from .score import ScoreNetwork
+# # 14 Apr version = 10 Apr + using 4 seconds of audio, filtering longer samples and padding shorter ones
+# from .condition_NS_plbert_adj_clean_ce_4s import ConditionerNetwork 
+# from .universe_gan_NS2_adj_4s import UniverseGAN
+# from .textencoder_plbert_op import TextEncoder
+# from .score import ScoreNetwork
 
 
 # # # Trying WavLM
