@@ -5,7 +5,7 @@ train:
         pin_memory: true
         num_workers: 12 # 24 # 6
         shuffle: true
-        batch_size: 8 # 4 # 8 # 15 # 15 # 8 # 10  # == 40 with 4 GPUs
+        batch_size: 4 # 8 # 15 # 15 # 8 # 10  # == 40 with 4 GPUs
 val:
     dataset: vb-val-16k
     dl_opts:
@@ -24,8 +24,8 @@ test:
 datasets:
     vb-train-16k:
         _target_: open_universe.datasets.NoisyDataset
-        audio_path: data/voicebank_demand/16k
-        text_path: data/voicebank_demand/trainset_28spk_txt  # NEW: path to transcript files
+        audio_path: data/vb_small
+        text_path: data/vb_small/train/text  # NEW: path to transcript files
         # audio_path: ../../data/voicebank_demand/16k
         # text_path: ../../data/voicebank_demand/trainset_28spk_txt  # NEW: path to transcript files
         fs: 16000
@@ -38,7 +38,7 @@ datasets:
         audio_path: ${..vb-train-16k.audio_path}
         text_path: ${..vb-train-16k.text_path}  # Re-use the same text_path
         fs: ${..vb-train-16k.fs}
-        split: val
+        split: train
         audio_len: 4.0 # UPDATE: 4 seconds here too
         part_used: 1.0 # 0.1 # 1.0  # Use 20% of validation data for faster validation
 
@@ -47,6 +47,6 @@ datasets:
         audio_path: ${..vb-train-16k.audio_path}
         text_path: ${..vb-train-16k.text_path}  # Re-use the same text_path
         fs: ${..vb-train-16k.fs}
-        split: test
+        split: train
         audio_len: 4.0 # UPDATE: 4 seconds here too
         part_used: 1.0  # Use full test set for final evaluation

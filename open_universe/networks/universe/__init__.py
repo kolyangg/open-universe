@@ -68,10 +68,11 @@ from .mdn import MixtureDensityNetworkLoss
 # from .textencoder_plbert_op2 import TextEncoder
 
 
-# DEFAULT
-from .score import ScoreNetwork
-from .condition import ConditionerNetwork
-from .universe_gan_NS import UniverseGAN
+# # DEFAULT
+# from .score import ScoreNetwork
+# # from .condition import ConditionerNetwork
+# from .condition_check2 import ConditionerNetwork
+# from .universe_gan_NS import UniverseGAN
 
 # from .condition_NS_plbert_adj import ConditionerNetwork 
 # from .universe_gan_NS2_adj import UniverseGAN
@@ -132,6 +133,14 @@ from .universe_gan_NS import UniverseGAN
 # from .universe_gan_NS2_adj_4s import UniverseGAN
 # from .textencoder_plbert_op_fix import TextEncoder
 # from .score import ScoreNetwork
+
+
+# 16 Apr version = Fixing masks
+# from .condition_NS_plbert_adj_clean_ce_4s import ConditionerNetwork 
+from .condition_NS_plbert_adj_clean_ce_4s_fix import ConditionerNetwork 
+from .universe_gan_NS2_adj_4s2 import UniverseGAN
+from .textencoder_plbert_op_fix import TextEncoder
+from .score_4s import ScoreNetwork
 
 
 # # # Trying WavLM

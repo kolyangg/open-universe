@@ -124,7 +124,15 @@ class TextEncoder(nn.Module):
             global_emb: Tensor of shape (B, hidden_dim)
             seq_emb: Tensor of shape (B, seq_len, seq_dim)
         """
+        print(f"[DEBUG TE] Processing text: type={type(input_data)}, len={len(input_data) if isinstance(input_data, list) else 'N/A'}")
+        
         phoneme_ids, attention_mask = self.tokenize(input_data)
+        # print(f"[DEBUG] Phoneme IDs first example: {phoneme_ids[0].tolist()}")
+        # print(f"[DEBUG] Attention mask first example: {attention_mask[0].tolist()}")
+        print(f"[DEBUG] Non-zero tokens per example: {attention_mask.sum(dim=1).tolist()}")
+        print(f"[DEBUG] Max sequence length: {phoneme_ids.shape[1]}")
+        print(f"[DEBUG] Padding percentage: {(1 - attention_mask.float().mean()).item()*100:.2f}%")
+        
         # Move token IDs and attention_mask to the same device as PL-BERT:
         device = next(self.plbert.parameters()).device
         phoneme_ids = phoneme_ids.to(device)
@@ -147,5 +155,6 @@ class TextEncoder(nn.Module):
         # if attention_mask is 1=real, 0=pad => we invert
         # i.e. text_key_mask[b, i] = (attention_mask[b, i] == 0)
         text_key_mask = (attention_mask == 0)
+        print(f"[DEBUG] Text key mask tokens: {text_key_mask.sum(dim=1).tolist()}")
     
         return global_emb, seq_emb, text_key_mask
