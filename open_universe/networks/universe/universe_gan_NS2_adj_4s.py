@@ -373,6 +373,11 @@ class UniverseGAN(Universe):
             loss_gen = loss_gen + loss_gen_s + loss_gen_f + loss_fm_s + loss_fm_f
 
         self.manual_backward(loss_gen)
+        
+        # # <-- dump the conditioner’s grad stats to file here:
+        # print(f'[DEBUG LOG] Dumping grad stats')
+        # self.condition_model.dump_grad_stats()
+
 
         grad_norm_score = torch.nn.utils.clip_grad_norm_(
             self.get_score_model().parameters(), self.grad_clip_vals.score

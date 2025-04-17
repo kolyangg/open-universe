@@ -450,8 +450,8 @@ class ConditionerDecoder(torch.nn.Module):
         conditions = []
         x, *_ = self.input_conv_block(x)
         x     = self.input_norm(x)          # normalize [B, C0, T]
-        for up, length in zip(self.up_modules, lengths):
-        # for lvl, (up, length) in enumerate(zip(self.up_modules, lengths)): # UPD FOR LAYER NORM
+        # for up, length in zip(self.up_modules, lengths):
+        for i, (up, length) in enumerate(zip(self.up_modules, lengths)): # UPD FOR LAYER NORM
             x, _, cond = up(x, length=length)
             
             ### ADD NEW lAYER NORM ### (DOESN'T WORK CORRECTLY)
@@ -462,9 +462,42 @@ class ConditionerDecoder(torch.nn.Module):
             # x = self.up_norms[lvl](x)   # [B, C, T] → [B, C, T]
             # ### ADD NEW lAYER NORM ### (DOESN'T WORK CORRECTLY)
             
+            # Simple fix: normalize after each upsampling
+            x = x / (x.norm(dim=1, keepdim=True).clamp(min=1e-8) * (i+1))
         
             conditions.append(cond)
         return x, conditions
+
+    # ### UPDATED FORWARD WITH NORMALIZATION
+    # def forward(self, x, lengths):
+    #     conditions = []
+    #     x, *_ = self.input_conv_block(x)
+    #     x = self.input_norm(x)  # normalize [B, C0, T]
+        
+    #     for i, (up, length) in enumerate(zip(self.up_modules, lengths)):
+    #         x, _, cond = up(x, length=length)
+            
+    #         # Add this section - gradient scaling for upsampling modules
+    #         if i < 2:  # Apply stronger scaling to early upsampling blocks (closer to output)
+    #             scale_factor = 0.3
+    #         else:
+    #             scale_factor = 0.5
+                
+    #         # Scale the features to control gradient magnitude
+    #         if self.training:
+    #             with torch.no_grad():
+    #                 current_norm = x.norm(dim=1, keepdim=True)
+    #                 target_norm = torch.ones_like(current_norm) * 0.5  # Target a reasonable norm
+    #                 scale = (target_norm / current_norm.clamp(min=1e-8))
+    #                 scale = torch.clamp(scale, 0.1, 10.0)  # Avoid extreme scaling
+                
+    #             x = x * scale  # Scale the features to control gradient magnitude
+                
+    #         # Apply group norm to stabilize the feature distribution
+    #         x = self.up_norms[i](x)
+            
+    #         conditions.append(cond)
+    #     return x, conditions
 
 
 # ----------------------------------------------------------------------

@@ -72,7 +72,8 @@ def main(cfg):
 
     wandb_logger = pl_loggers.WandbLogger(
         # project="universe",
-        project="universe_small",
+        # project="universe_small",
+        project="universe_4s",
         name=exp_name,
         config=OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
     )

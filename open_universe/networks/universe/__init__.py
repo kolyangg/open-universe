@@ -74,6 +74,13 @@ from .mdn import MixtureDensityNetworkLoss
 # from .condition_check2 import ConditionerNetwork
 # from .universe_gan_NS import UniverseGAN
 
+
+# DEFAULT TESTING - 17 APR
+from .score import ScoreNetwork
+# from .condition import ConditionerNetwork
+from .condition_check2 import ConditionerNetwork
+from .universe_gan_NS_check import UniverseGAN
+
 # from .condition_NS_plbert_adj import ConditionerNetwork 
 # from .universe_gan_NS2_adj import UniverseGAN
 
@@ -135,12 +142,21 @@ from .mdn import MixtureDensityNetworkLoss
 # from .score import ScoreNetwork
 
 
-# 16 Apr version = Fixing masks
-# from .condition_NS_plbert_adj_clean_ce_4s import ConditionerNetwork 
-from .condition_NS_plbert_adj_clean_ce_4s_fix import ConditionerNetwork 
-from .universe_gan_NS2_adj_4s2 import UniverseGAN
-from .textencoder_plbert_op_fix import TextEncoder
-from .score_4s import ScoreNetwork
+# # 16 Apr version = Fixing masks
+# # from .condition_NS_plbert_adj_clean_ce_4s import ConditionerNetwork 
+# from .condition_NS_plbert_adj_clean_ce_4s_fix import ConditionerNetwork 
+# from .universe_gan_NS2_adj_4s2 import UniverseGAN
+# from .textencoder_plbert_op_fix import TextEncoder
+# from .score_4s import ScoreNetwork
+
+
+# # 17 Apr version = Fixing grads
+# # from .condition_NS_plbert_adj_clean_ce_4s import ConditionerNetwork 
+# # from .condition_NS_plbert_adj_clean_ce_4s_fix import ConditionerNetwork 
+# from .condition_NS_plbert_adj_clean_ce_4s_fix_norm import ConditionerNetwork 
+# from .universe_gan_NS2_adj_4s2 import UniverseGAN
+# from .textencoder_plbert_op_fix import TextEncoder
+# from .score_4s import ScoreNetwork
 
 
 # # # Trying WavLM

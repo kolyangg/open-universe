@@ -29,6 +29,10 @@ from .blocks import (
     cond_weight_norm,
 )
 
+import os
+import datetime
+from collections import defaultdict
+
 
 def make_st_convs(
     ds_factors,
@@ -378,6 +382,45 @@ class ConditionerNetwork(torch.nn.Module):
         )
 
         self.precoding = instantiate(precoding, _recursive_=True) if precoding else None
+        
+        
+            # # ——— gradient‐hook bookkeeping ————————————————————————————
+       
+        # Make sure the log file exists and is writable
+        self.grad_log_path = os.path.join(os.getcwd(), "grad_stats.log")
+        
+        # Create an empty file if it doesn't exist
+        with open(self.grad_log_path, "a") as f:
+            f.write(f"# Gradient stats log created at {datetime.datetime.now()}\n")
+        
+        print(f"[INFO] Gradient stats will be logged to: {self.grad_log_path}")
+        
+        # Simplify the grad stats tracking to just a dictionary
+        self.grad_stats = defaultdict(list)
+        
+        # Simplified hook without trying to track multiple statistics
+        def make_module_hook(mod_name):
+            def hook(module, grad_input, grad_output):
+                if not grad_output or grad_output[0] is None:
+                    return
+                    
+                g = grad_output[0].detach()
+                l2_norm = g.norm().item()
+                max_val = g.abs().max().item()
+                
+                # Store in memory
+                self.grad_stats[mod_name].append((l2_norm, max_val))
+                
+                # Make sure the grad_stats.log exists in current directory
+                with open(self.grad_log_path, "a") as f:
+                    f.write(f"{mod_name}\t{l2_norm:.6e}\t{max_val:.6e}\n")
+            return hook
+            
+        # Register hooks on key modules
+        for name, module in self.named_modules():
+            if isinstance(module, (ConvBlock, PReLU_Conv, torch.nn.Linear)):
+                module.register_full_backward_hook(make_module_hook(name))
+
 
     def forward(self, x, x_wav=None, train=False):
         n_samples = x.shape[-1]
@@ -423,3 +466,27 @@ class ConditionerNetwork(torch.nn.Module):
             return conditions, y_hat, h
         else:
             return conditions
+        
+    
+    def dump_grad_stats(self):
+        """Write a summary of gradient statistics to the log file."""
+        try:
+            print(f"[DEBUG] Dumping gradient stats to {self.grad_log_path}")
+            
+            with open(self.grad_log_path, "a") as f:
+                f.write(f"\n--- Batch summary at {datetime.datetime.now()} ---\n")
+                
+                for mod_name, stats_list in self.grad_stats.items():
+                    if not stats_list:
+                        continue
+                        
+                    # Get the last stats
+                    l2_norm, max_val = stats_list[-1]
+                    f.write(f"{mod_name}\tL2={l2_norm:.6e}\tMax={max_val:.6e}\n")
+                    
+            # Clear the stats for the next batch
+            self.grad_stats.clear()
+            print(f"[DEBUG] Gradient stats dumped successfully")
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to dump gradient stats: {e}")
