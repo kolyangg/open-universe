@@ -155,6 +155,11 @@ class MelAdapter(torch.nn.Module):
 
         pad_tot = n_fft - ds_factor
         self.pad_left, self.pad_right = pad_tot // 2, pad_tot - pad_tot // 2
+        
+        ### NEW FOR NORMALIZATION
+        self.new_norm = torch.nn.LayerNorm(output_channels, elementwise_affine=True)
+        ### NEW FOR NORMALIZATION
+
 
     def compute_mel_spec(self, x: torch.Tensor, audio_mask: Optional[torch.Tensor] = None):
         """
@@ -208,6 +213,14 @@ class MelAdapter(torch.nn.Module):
         x = self.compute_mel_spec(x, audio_mask=audio_mask)
         x = self.conv(x)
         x, *_ = self.conv_block(x)
+        
+        ### NEW FOR NORMALIZATION
+        # x: [B, C, T] → transpose → [B, T, C] → norm → back
+        x = x.transpose(1, 2)                      # [B, T, C]
+        x = self.new_norm(x)                           # LN over last dim (C)
+        x = x.transpose(1, 2)                      # [B, C, T]
+        ### NEW FOR NORMALIZATION
+        
         return x
 
 
