@@ -18,7 +18,11 @@ Contains the necessary API to load and process data during training.
 
 Author: Robin Scheibler (@fakufaku)
 """
-from .datamodule import DataModule
+# from .datamodule import DataModule
 # from .static_dataset import NoisyDataset
 # from .static_dataset_NS2 import NoisyDataset
-from .static_dataset_NS_4sec_simple import NoisyDataset
+
+# from .static_dataset_NS_4sec_simple import NoisyDataset
+
+from .datamodule_adj import DataModule
+from .static_dataset_NS_4sec_fix import NoisyDataset
