@@ -12,6 +12,7 @@ ckpt_path: null
 # ckpt_path: ./exp/universepp_vb_16k_NS2_4s/2025-04-14_11-27-04_/checkpoints/universe/exper/last.ckpt
 # ckpt_path: ./exp/universepp_vb_16k_NS2_4s/2025-04-14_23-52-51_/checkpoints/universe/exper/last.ckpt
 # ckpt_path: ./exp/universepp_vb_16k_NS2_4s/2025-04-15_05-42-24_/checkpoints/universe/exper/last.ckpt
+# ckpt_path: ./exp/universepp_vb_16k_plain_4s/2025-04-17_21-46-53_/checkpoints/universe/exper/last.ckpt
 
 train: true
 test: false
