@@ -24,5 +24,8 @@ Author: Robin Scheibler (@fakufaku)
 
 # from .static_dataset_NS_4sec_simple import NoisyDataset
 
-from .datamodule_adj import DataModule
-from .static_dataset_NS_4sec_fix import NoisyDataset
+# from .datamodule_adj import DataModule
+# from .static_dataset_NS_4sec_fix import NoisyDataset
+
+from .datamodule_adj2 import DataModule
+from .static_dataset_NS_4sec_fix2 import NoisyDataset
