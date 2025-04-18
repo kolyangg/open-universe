@@ -86,11 +86,30 @@ def max_collator(
     B      = noisy_b.shape[0]                 # clips in this batch
     valid  = mask_b.sum(dim=1)                # frames per‑clip
     pad_pc = 100 * (1 - valid / T_max)        # padding % per‑clip
+    
+    # -------- NEW: print debug numbers for batch debug ------------------
     print(f"[collate] B={B:2d}  max_len={T_max}  "
           f"avg_pad={pad_pc.mean():4.1f}%  "
           f"max_pad={pad_pc.max():4.1f}%  "
           f"tot_pad={pad_pct:4.1f}%"
           )
+    
+    # -------- NEW: send the same numbers to W&B ------------------
+    try:                         # only if wandb is available & a run is active
+        import wandb
+        if wandb.run is not None:
+            wandb.run.log(
+                {
+                    "batch_checks/avg_pad": pad_pc.mean().item(),
+                    "batch_checks/max_pad": pad_pc.max().item(),
+                    "batch_checks/tot_pad": pad_pct,
+                    "batch_checks/B":        B,
+                    "batch_checks/max_len":  T_max,
+                },
+                commit=False,    # keep the Lightning step syncing behaviour
+            )
+    except ImportError:
+        pass
 
     return noisy_b, clean_b, list(texts), mask_b
 
