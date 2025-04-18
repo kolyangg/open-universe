@@ -158,13 +158,23 @@ from .mdn import MixtureDensityNetworkLoss
 # from .textencoder_plbert_op_fix import TextEncoder
 # from .score_4s import ScoreNetwork
 
-# # 17 Apr version2 = 10 Apr + simpler 4s dataset
+# # # 17 Apr version2 = 10 Apr + simpler 4s dataset
+# # from .condition_NS_plbert_adj import ConditionerNetwork 
+# # from .condition_NS_plbert_adj_clean_ce import ConditionerNetwork 
+# from .condition_NS_plbert_adj_clean_ce_check import ConditionerNetwork 
+# from .universe_gan_NS2_adj import UniverseGAN
+# from .textencoder_plbert_op import TextEncoder
+# from .score import ScoreNetwork
+
+
+# # 18 Apr version = 17 Apr + masking audio padding
 # from .condition_NS_plbert_adj import ConditionerNetwork 
 # from .condition_NS_plbert_adj_clean_ce import ConditionerNetwork 
 from .condition_NS_plbert_adj_clean_ce_check import ConditionerNetwork 
-from .universe_gan_NS2_adj import UniverseGAN
+from .m_universe_gan_NS2_adj import UniverseGAN
 from .textencoder_plbert_op import TextEncoder
 from .score import ScoreNetwork
+
 
 
 # # # Trying WavLM

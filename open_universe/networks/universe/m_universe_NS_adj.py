@@ -505,10 +505,19 @@ class Universe(pl.LightningModule):
         t_min=0.0,
         t_max=1.0,
         rng=None,
-        text = None ## NEW WITH TEXT ENCODER ###
+        text = None, ## NEW WITH TEXT ENCODER ###
+        mask = None
     ):
         mix_trans = self.transform(mix)
         tgt_trans = self.transform(target)
+        
+        if mask is not None:
+            m = mask.unsqueeze(1)
+            mix     = mix * m
+            target  = target * m
+        mix_trans  = self.transform(mix)
+        tgt_trans  = self.transform(target)
+        
 
         if self.with_noise_target:
             noise = mix - target
@@ -522,6 +531,10 @@ class Universe(pl.LightningModule):
 
         # sample the noise and create the target
         z = target.new_zeros(tgt_trans.shape).normal_(generator=rng)
+        
+        if mask is not None:
+            z = z * m
+        
         x_t = tgt_trans + sigma[:, None, None] * z
 
         # run computations
@@ -557,6 +570,10 @@ class Universe(pl.LightningModule):
 
         # compute losses
         l_score = self.loss_score(sigma[..., None, None] * score, -z)
+        if mask is not None:
+            l_score = self.loss_score(sigma[...,None,None]*score*m, -z*m)
+        else:
+            l_score = self.loss_score(sigma[...,None,None]*score, -z)
 
         if train:
             if self.losses_kwargs.weights.latent > 0.0 and h_est is not None:
@@ -600,13 +617,24 @@ class Universe(pl.LightningModule):
         If batch has 3 items => text is present => new approach.
         Else => old approach exactly.
         """
-        if len(batch) >= 3 and isinstance(batch[2], (str, list, torch.Tensor)):
+        # if len(batch) >= 3 and isinstance(batch[2], (str, list, torch.Tensor)):
+        #     self.have_text = True
+        #     mix, target, text = batch[:3]
+        #     print(f"[DEBUG] training_step sees text => {text}")
+        
+        if len(batch) == 4:                     # mix, tgt, text?, mask
+            mix, target, text, mask = batch
+            self.have_text = isinstance(text, (str, list, torch.Tensor))
+        elif len(batch) == 3 and isinstance(batch[2], (str, list, torch.Tensor)):
             self.have_text = True
             mix, target, text = batch[:3]
-            print(f"[DEBUG] training_step sees text => {text}")
+            mask = None
+        
         else:
             self.have_text = False
             mix, target = batch[:2]
+            mask = None
+              
 
         if getattr(self.train_kwargs, "dynamic_mixing", False):
             noise = mix - target
@@ -616,6 +644,12 @@ class Universe(pl.LightningModule):
         (mix, target), *stats = self.normalize_batch(
             (mix, target), norm=self.normalization_norm
         )
+        
+        
+        if mask is not None:                    # mask padded frames
+            m = mask.unsqueeze(1)
+            mix    = mix * m
+            target = target * m
 
         # We unify old vs. new:
         if self.have_text:
@@ -626,7 +660,9 @@ class Universe(pl.LightningModule):
                 train=True,
                 time_sampling=self.train_kwargs.time_sampling,
                 text=text,  # ADDED
+                mask=mask   # ← NEW
             )
+            
         else:
             # old approach
             loss, l_score, l_signal, l_latent = self.compute_losses(

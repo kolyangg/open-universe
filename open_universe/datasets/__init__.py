@@ -27,5 +27,11 @@ Author: Robin Scheibler (@fakufaku)
 # from .datamodule_adj import DataModule
 # from .static_dataset_NS_4sec_fix import NoisyDataset
 
-from .datamodule_adj2 import DataModule
-from .static_dataset_NS_4sec_fix2 import NoisyDataset
+# from .datamodule_adj2 import DataModule
+# from .static_dataset_NS_4sec_fix2 import NoisyDataset
+
+# from .datamodule_adj3 import DataModule
+# from .static_dataset_NS_4sec_fix3 import NoisyDataset
+
+from .m_datamodule_adj3 import DataModule
+from .m_static_dataset_NS_4sec_fix3 import NoisyDataset

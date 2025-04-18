@@ -22,7 +22,7 @@ from omegaconf import OmegaConf
 from .. import bigvgan as gan
 from .blocks import PReLU_Conv
 # Import the "Universe" or any base class you use:
-from .universe_NS_adj import Universe  # The same base as old code.
+from .m_universe_NS_adj import Universe  # The same base as old code.
 
 log = logging.getLogger(__name__)
 
@@ -171,27 +171,33 @@ class UniverseGAN(Universe):
         except TypeError:
             has_schedulers = False
 
-        # The "old" code expects (mix_raw, target_raw, text),
-        # but might ignore text if not used. We'll do minimal changes:
-        if len(batch) >= 3 and isinstance(batch[2], (str, list)):
-            # We have a possible text transcript
-            mix_raw, target_raw, text = batch[:3]
+        # Expected layouts now:
+        #  • (mix, tgt, text, mask)      ← normal
+        #  • (mix, tgt,   –,  mask)      ← no‑text training
+        #  • legacy 3‑tuple is still OK.
+        if len(batch) == 4:                          # ← NEW
+            mix_raw, target_raw, text, mask = batch
             text_str_list = text if isinstance(text, list) else [text]
-            
             # For backward compatibility, we keep the original approach:
             target_original = target_raw
-            
-        else:
-            # fallback: no text
-            mix_raw, target_raw = batch[:2]
-            text_str_list = []
-            
-            if len(batch) == 4:
-                # in this case we have a special target for the conditioner network
-                target_original = batch[2]
-            else:
-                target_original = target
+        elif len(batch) == 3 and isinstance(batch[2], (str, list)):
+            mix_raw, target_raw, text = batch
+            text_str_list = text if isinstance(text, list) else [text]
+            mask = None
+            # For backward compatibility, we keep the original approach:
+            target_original = target_raw
+        elif len(batch) == 3:                        # mix, tgt, mask  (no text)
+            mix_raw, target_raw, mask = batch
+            text = []
+            # For backward compatibility, we keep the original approach:
+            target_original = target_raw
+        else:                                        # legacy 2‑tuple
+            mix_raw, target_raw = batch
+            text, mask = [], None
+            # For backward compatibility, we keep the original approach:
+            target_original = target_raw
 
+        
         
         if getattr(self.train_kwargs, "dynamic_mixing", False):
             noise = mix_raw - target_raw
@@ -206,6 +212,14 @@ class UniverseGAN(Universe):
         (mix, target, target_original), *stats = self.normalize_batch(
             (mix_raw, target_raw, target_original), norm=self.normalization_norm
         )
+        
+        # ---------- ❶  mask out padded frames early ------------------------
+        if mask is not None:
+            mask_c = mask.unsqueeze(1)          # [B,1,T]
+            mix            = mix   * mask_c
+            target         = target * mask_c
+            target_original= target_original * mask_c
+        
 
         if self.transform is not None:
             mix = self.transform(mix)
@@ -216,6 +230,11 @@ class UniverseGAN(Universe):
         
         # sample the noise and create the target
         z = target.new_zeros(target.shape).normal_()
+        # print(f'[DEBUG MASK]: {mask}')
+        if mask is not None:                    # do NOT inject noise in padding
+           z = z * mask_c
+        
+        
         x_t = target + sigma[:, None, None] * z
 
         # ---------------------------
@@ -326,6 +345,12 @@ class UniverseGAN(Universe):
 
         # 1. Score loss
         l_score = self.loss_score(sigma[..., None, None] * score, -z)
+        
+        if mask is not None:
+            m = mask_c                         # broadcast helper
+            l_score = self.loss_score(sigma[...,None,None]*score*m, -z*m)
+        else:
+            l_score = self.loss_score(sigma[...,None,None]*score, -z)
         
         # 2. L1 Mel-Spectrogram Loss
         loss_mel = torch.nn.functional.l1_loss(mel_y_est, mel_target)
