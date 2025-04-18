@@ -75,11 +75,11 @@ from .mdn import MixtureDensityNetworkLoss
 # from .universe_gan_NS import UniverseGAN
 
 
-# DEFAULT TESTING - 17 APR
-from .score import ScoreNetwork
-# from .condition import ConditionerNetwork
-from .condition_check2 import ConditionerNetwork
-from .universe_gan_NS_check import UniverseGAN
+# # DEFAULT TESTING - 17 APR
+# from .score import ScoreNetwork
+# # from .condition import ConditionerNetwork
+# from .condition_check2 import ConditionerNetwork
+# from .universe_gan_NS_check import UniverseGAN
 
 # from .condition_NS_plbert_adj import ConditionerNetwork 
 # from .universe_gan_NS2_adj import UniverseGAN
@@ -158,13 +158,13 @@ from .universe_gan_NS_check import UniverseGAN
 # from .textencoder_plbert_op_fix import TextEncoder
 # from .score_4s import ScoreNetwork
 
-# # # 17 Apr version2 = 10 Apr + simpler 4s dataset
-# # from .condition_NS_plbert_adj import ConditionerNetwork 
-# # from .condition_NS_plbert_adj_clean_ce import ConditionerNetwork 
-# from .condition_NS_plbert_adj_clean_ce_check import ConditionerNetwork 
-# from .universe_gan_NS2_adj import UniverseGAN
-# from .textencoder_plbert_op import TextEncoder
-# from .score import ScoreNetwork
+# # 17 Apr version2 = 10 Apr + simpler 4s dataset
+# from .condition_NS_plbert_adj import ConditionerNetwork 
+# from .condition_NS_plbert_adj_clean_ce import ConditionerNetwork 
+from .condition_NS_plbert_adj_clean_ce_check import ConditionerNetwork 
+from .universe_gan_NS2_adj import UniverseGAN
+from .textencoder_plbert_op import TextEncoder
+from .score import ScoreNetwork
 
 
 # # # Trying WavLM
