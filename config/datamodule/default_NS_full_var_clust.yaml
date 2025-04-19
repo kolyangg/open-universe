@@ -33,9 +33,9 @@ datasets:
         # text_path: ../../data/voicebank_demand/trainset_28spk_txt  # NEW: path to transcript files
         fs: 16000
         split: train
-        audio_len: 8.0 # 16.0 # max allowed sample (sec)
+        audio_len: 16.0 # 16.0 # max allowed sample (sec)
         part_used: 1.0 # 0.1 # 1.0 # 0.01  # Use only 5% of data
-        audio_batch_size: 24.0 # 12.0 # 12.0 for best performance locally (16 GB GPU)
+        audio_batch_size: 20.0 # 24.0 is too much for cluster # 12.0 # 12.0 for best performance locally (16 GB GPU)
 
     vb-val-16k: # NORMAL
         _target_: open_universe.datasets.NoisyDataset
