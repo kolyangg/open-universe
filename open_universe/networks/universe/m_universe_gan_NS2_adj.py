@@ -298,6 +298,14 @@ class UniverseGAN(Universe):
         # use a simple mel loss to regularize training
         mel_y_est = self.condition_model.input_mel.compute_mel_spec(y_est)
         mel_target = self.condition_model.input_mel.compute_mel_spec(target_original)
+        
+        ### 19 APR ADD
+        # ---------- mask generator output & targets ------------------------
+        if mask is not None:
+            y_est            = y_est            * mask_c
+            target_original  = target_original  * mask_c
+
+        # (keep 'cond' untouched – its convolutions already saw masked mix)
 
 
         # -------------------------------

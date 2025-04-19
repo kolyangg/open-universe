@@ -30,8 +30,14 @@ Author: Robin Scheibler (@fakufaku)
 # from .datamodule_adj2 import DataModule
 # from .static_dataset_NS_4sec_fix2 import NoisyDataset
 
+# 18 Apr: Variable batch length, total sec length constsant
 # from .datamodule_adj3 import DataModule
 # from .static_dataset_NS_4sec_fix3 import NoisyDataset
 
-from .m_datamodule_adj3 import DataModule
-from .m_static_dataset_NS_4sec_fix3 import NoisyDataset
+# # 18 Apr: Variable batch length, total sec length constsant + masking
+# from .m_datamodule_adj3 import DataModule
+# from .m_static_dataset_NS_4sec_fix3 import NoisyDataset
+
+# 19 Apr: old 4 sec batches (filter out longer) with zero padding for small samples + masking
+from .m_datamodule_pad import DataModule
+from .m_static_dataset_NS_4sec_pad import NoisyDataset

@@ -40,6 +40,20 @@ def randn(x, sigma, rng=None):
     return noise * sigma[:, None, None]
 
 
+# --- mask utilities -------------------------------------------------
+def _apply_mask(wav, mask):
+    if mask is None:
+        return wav
+    return wav * mask.unsqueeze(1)            # [B,1,T] → broadcast
+def _downsample_mask(mask, factor):
+    """average‑pool then binarise so it aligns with mel/latent length."""
+    if mask is None:
+        return None
+    m = torch.nn.functional.avg_pool1d(mask.unsqueeze(1), factor, factor)
+    return (m > 0.5).float()                  # shape [B,1,T//factor]
+
+
+
 class Universe(pl.LightningModule):
     def __init__(
         self,
@@ -535,6 +549,11 @@ class Universe(pl.LightningModule):
         if mask is not None:
             z = z * m
         
+        ### NEW ADD 19 APR ###
+        z = target.new_zeros(tgt_trans.shape).normal_(generator=rng)
+        z = _apply_mask(z, mask)             # keep score loss OK
+        ### NEW ADD 19 APR ###
+        
         x_t = tgt_trans + sigma[:, None, None] * z
 
         # run computations
@@ -575,13 +594,33 @@ class Universe(pl.LightningModule):
         else:
             l_score = self.loss_score(sigma[...,None,None]*score, -z)
 
+        # if train:
+        #     if self.losses_kwargs.weights.latent > 0.0 and h_est is not None:
+        #         mel_target = self.condition_model.input_mel.compute_mel_spec(target_aux)
+        #         mel_target = mel_target / torch.linalg.norm(
+        #             mel_target, dim=(-2, -1), keepdim=True
+        #         ).clamp(min=1e-5)
+        #         l_latent = self.loss_latent(h_est, mel_target)
+
+        ### NEW CHANGE 19 APR ###
         if train:
             if self.losses_kwargs.weights.latent > 0.0 and h_est is not None:
-                mel_target = self.condition_model.input_mel.compute_mel_spec(target_aux)
+                mel_target = self.condition_model.input_mel.compute_mel_spec(
+                    _apply_mask(target_aux, mask)
+                )                
+                
                 mel_target = mel_target / torch.linalg.norm(
                     mel_target, dim=(-2, -1), keepdim=True
                 ).clamp(min=1e-5)
                 l_latent = self.loss_latent(h_est, mel_target)
+                
+                # down‑sample the mask to mel length once
+                mel_mask = _downsample_mask(mask, mel_target.shape[-1] * target.shape[-1] // mel_target.shape[-1])
+                h_est_m   = _apply_mask(h_est, mel_mask.squeeze(1))
+                mel_target= _apply_mask(mel_target, mel_mask.squeeze(1))
+                l_latent  = self.loss_latent(h_est_m, mel_target)
+        ### NEW CHANGE 19 APR ###
+        
             else:
                 l_latent = l_score.new_zeros(1)
 
