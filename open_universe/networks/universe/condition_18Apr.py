@@ -288,7 +288,7 @@ class CrossAttentionBlock(torch.nn.Module):
 
         attn_out, attn_weights = self.cross_attn(
             x, cond, cond,
-            key_padding_mask=cond_mask,
+            key_padding_mask=cond_mask, # text
             need_weights=True
         )
         max_attentions = attn_weights.max(dim=-1)[0]
@@ -300,6 +300,46 @@ class CrossAttentionBlock(torch.nn.Module):
         text_metrics["attention_min"] = attn_weights.min().item()
         text_metrics["attention_max"] = attn_weights.max().item()
         text_metrics["attention_mean"] = attn_weights.mean().item()
+        
+        # New stats excluding padding
+        if cond_mask is not None:
+            # Create a mask to identify valid positions (non-padding)
+            valid_positions = ~cond_mask.unsqueeze(1).expand_as(attn_weights)
+            
+            # Calculate statistics on only the valid tokens
+            valid_attentions = attn_weights.masked_select(valid_positions)
+            
+            if valid_attentions.numel() > 0:
+                valid_min = valid_attentions.min().item()
+                valid_max = valid_attentions.max().item()
+                valid_mean = valid_attentions.mean().item()
+                
+                # Calculate valid attention focus (max attention per query, only considering valid tokens)
+                # First create a version of attn_weights where padding positions are set to -inf
+                masked_attn_weights = attn_weights.clone()
+                for b in range(attn_weights.size(0)):
+                    # Set padding positions to -inf for this batch item
+                    if cond_mask[b].any():
+                        masked_attn_weights[b, :, cond_mask[b]] = float('-inf')
+                
+                # Now get max attention per query (excluding padding)
+                valid_max_attentions = masked_attn_weights.max(dim=-1)[0]
+                valid_attention_focus = valid_max_attentions.mean().item()
+                
+                print(f"[DEBUG] Attention focus (excl. padding): {valid_attention_focus:.4f}")
+                print(f"[DEBUG] Attention stats (excl. padding): "
+                    f"min={valid_min:.4f}, max={valid_max:.4f}, mean={valid_mean:.4f}")
+                
+                text_metrics["valid_attention_focus"] = valid_attention_focus
+                text_metrics["valid_attention_min"] = valid_min
+                text_metrics["valid_attention_max"] = valid_max
+                text_metrics["valid_attention_mean"] = valid_mean
+                
+                # Calculate padding percentage
+                padding_ratio = (cond_mask.float().sum() / cond_mask.numel()).item()
+                print(f"[DEBUG] Text padding ratio: {padding_ratio:.2%}")
+                text_metrics["padding_ratio"] = padding_ratio
+
 
         if attn_weights.shape[0] > 0:
             # topK for first sample
@@ -389,7 +429,13 @@ class TextConditioner(torch.nn.Module):
         x_mel_orig = x_mel.clone()
         
         # 1) Encode text => (global_emb, seq_emb)
-        global_emb, seq_emb = self.text_encoder(text)
+        # global_emb, seq_emb = self.text_encoder(text)
+        
+        global_emb, seq_emb, text_key_mask = self.text_encoder(text)
+        # T_text = seq_emb.size(1)
+        print(f"[DEBUG] Text key mask tokens inside TE: {text_key_mask.sum(dim=1).tolist()}")
+        
+        
         # 2) FiLM on x_mel
         x_mel_t = x_mel.transpose(1, 2)  # => [B, T_mel, 512]
         x_mel_t, film_info = self.film_global(x_mel_t, global_emb)
@@ -397,7 +443,8 @@ class TextConditioner(torch.nn.Module):
 
         # 3) Cross-attn
         x_mel_attn = self.mel_to_attn(x_mel_t)   # => [B, T_mel, cross_attention_dim]
-        x_mel_attn, attn_info = self.cross_attention(x_mel_attn, seq_emb)
+        # x_mel_attn, attn_info = self.cross_attention(x_mel_attn, seq_emb)
+        x_mel_attn, attn_info = self.cross_attention(x_mel_attn, seq_emb, cond_mask = text_key_mask)
         text_metrics.update(attn_info)
         x_mel_t = self.attn_to_mel(x_mel_attn)   # => [B, T_mel, 512]
 

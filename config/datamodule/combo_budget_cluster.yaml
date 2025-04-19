@@ -4,7 +4,7 @@ _target_: open_universe.datasets.DataModule
 mode: bucket_budget         # fixed | bucket_bs | bucket_budget
 fixed_len_sec: 4.0          # only for mode=fixed
 batch_size: 4               # for fixed / bucket_bs
-budget_sec: 18.0 # 18.0 # 12.0     # for bucket_budget # Cluster: 24.0 = 1h 22min per epoch; 18.0 = 1h 05min per epoch; 12.0 = 1h 16min per epoch
+budget_sec: 24.0 # 18.0 # 12.0     # for bucket_budget # Cluster: 24.0 = 1h 22min per epoch; 18.0 = 1h 05min per epoch; 12.0 = 1h 16min per epoch
 width_pct: null # 0.05             # bucket tolerance (fallback)
 width_sec: 0.25             # (use one or the other)
 order: asc   # asc          # asc | desc | rand             (bucket modes)
