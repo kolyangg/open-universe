@@ -39,5 +39,14 @@ Author: Robin Scheibler (@fakufaku)
 # from .m_static_dataset_NS_4sec_fix3 import NoisyDataset
 
 # 19 Apr: old 4 sec batches (filter out longer) with zero padding for small samples + masking
-from .m_datamodule_pad import DataModule
-from .m_static_dataset_NS_4sec_pad import NoisyDataset
+# from .m_datamodule_pad import DataModule
+# from .m_static_dataset_NS_4sec_pad import NoisyDataset
+
+from .m_datamodule_pad2 import DataModule
+from .m_static_dataset_NS_4sec_pad2 import NoisyDataset
+
+
+# 19 Apr: Combined version of all three options
+
+from .datamodule_combo import DataModule
+from .static_dataset_combo import NoisyDataset

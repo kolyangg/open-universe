@@ -171,7 +171,8 @@ from .mdn import MixtureDensityNetworkLoss
 # from .condition_NS_plbert_adj import ConditionerNetwork 
 # from .condition_NS_plbert_adj_clean_ce import ConditionerNetwork 
 from .condition_NS_plbert_adj_clean_ce_check import ConditionerNetwork 
-from .m_universe_gan_NS2_adj import UniverseGAN
+# from .m_universe_gan_NS2_adj import UniverseGAN
+from .m_universe_gan_NS2_adj2 import UniverseGAN
 from .textencoder_plbert_op import TextEncoder
 from .score import ScoreNetwork
 

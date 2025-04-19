@@ -267,6 +267,7 @@ class Universe(pl.LightningModule):
         ensemble_stat: Optional[str] = "median",
         warm_start: Optional[int] = None,
         text: Optional[torch.Tensor] = None,  # <--- ADDED for text
+        mask: Optional[torch.Tensor] = None,  # ← NEW
     ) -> torch.Tensor:
         """
         If text is provided, we call condition_model with text. If not, old path.
@@ -277,6 +278,12 @@ class Universe(pl.LightningModule):
             n_steps = self.diff_kwargs.n_steps
 
         x_ndim = mix.ndim
+        
+        if mask is not None:
+            mix = mix * mask.unsqueeze(1)          # zero padded region
+        x_ndim = mix.ndim
+        
+        
         if x_ndim == 1:
             mix = mix[None, None, :]
         elif x_ndim == 2:
@@ -389,6 +396,9 @@ class Universe(pl.LightningModule):
         # remove the padding and restore signal scale
         x = self.unpad(x, pad_)
         x = torch.nn.functional.pad(x, (0, mix_len - x.shape[-1]))
+        
+        if mask is not None:                       # keep tail at 0
+            x = x * mask.unsqueeze(1)
 
         if keep_rms:
             x_rms = x.square().mean(dim=(-2, -1), keepdim=True).sqrt().clamp(min=1e-5)
@@ -771,40 +781,78 @@ class Universe(pl.LightningModule):
         No difference to the old code for no-text scenario.
         """
         # detect text
-        if len(batch) >= 3 and isinstance(batch[2], (str, list, torch.Tensor)):
+        # if len(batch) >= 3 and isinstance(batch[2], (str, list, torch.Tensor)):
+        #     self.have_text = True
+        #     mix_raw, target_raw, text = batch[:3]
+        # else: # same as in original
+        #     self.have_text = False
+        #     mix_raw, target_raw = batch[:2]
+            
+        # ------------------- unpack ---------------------
+        if len(batch) == 4:                       # mix, tgt, txt?, mask
+            mix_raw, target_raw, text, mask = batch
+            self.have_text = isinstance(text, (str, list, torch.Tensor))
+        elif len(batch) == 3 and isinstance(batch[2], (str, list, torch.Tensor)):
+            mix_raw, target_raw, text = batch
+            mask = None
             self.have_text = True
-            mix_raw, target_raw, text = batch[:3]
-        else: # same as in original
-            self.have_text = False
+        else:                                     # legacy 2‑tuple
             mix_raw, target_raw = batch[:2]
+            text, mask = None, None
+            self.have_text = False
 
-        batch_scaled, *stats = self.normalize_batch((mix_raw, target_raw), norm=self.normalization_norm)
+        # batch_scaled, *stats = self.normalize_batch((mix_raw, target_raw), norm=self.normalization_norm)
+        # mix, target = batch_scaled
+        
+        # ------------- apply mask BEFORE normalisation -----------
+        if mask is not None:
+            m = mask.unsqueeze(1)                 # [B,1,T]
+            mix_raw    = mix_raw    * m
+            target_raw = target_raw * m
+
+        batch_scaled, *stats = self.normalize_batch(
+            (mix_raw, target_raw), norm=self.normalization_norm
+        )
         mix, target = batch_scaled
+        
+        
         batch_size = mix.shape[0]
 
         tb = torch.linspace(0.0, 1.0, self.val_kwargs.n_bins + 1, device=mix.device)
         bin_scores = []
         for i in range(self.val_kwargs.n_bins):
+            # ----------- pad mix, target *and* mask consistently ----------
+            mix_p,   pad_ = self.pad(mix)
+            target_p, _   = self.pad(target, pad=pad_)
+            if mask is not None:
+                mask_p = torch.nn.functional.pad(
+                    mask, (pad_ // 2, pad_ - pad_ // 2)
+                )
+            else:
+                mask_p = None
+
             if self.have_text:
                 ls = self.compute_losses(
-                    self.pad(mix)[0],
-                    self.pad(target)[0],
+                    mix_p[0],
+                    target_p[0],
                     train=False,
                     time_sampling="time_uniform", # always sample uniformly for validation
                     t_min=tb[i],
                     t_max=tb[i + 1],
                     rng=self.rng,
-                    text=text ## NEW WITH TEXT ENCODER ###
+                    text=text, ## NEW WITH TEXT ENCODER ###
+                    mask=mask_p,
                 )
             else: # same as in original
                 ls = self.compute_losses(
-                    self.pad(mix)[0],
-                    self.pad(target)[0],
++                   mix_p[0],
++                   target_p[0],
                     train=False,
                     time_sampling="time_uniform", # always sample uniformly for validation
                     t_min=tb[i],
                     t_max=tb[i + 1],
-                    rng=self.rng
+                    rng=self.rng,
+                    mask=mask_p,
                 )
             bin_scores.append(ls)
 
@@ -838,17 +886,30 @@ class Universe(pl.LightningModule):
         if self.trainer.testing or self.n_batches_est_done < self.val_kwargs.max_enh_batches:
             self.n_batches_est_done += 1
             # use unnormalized data for enhancement
+            # if self.have_text:
+            #     mix_, target_, text_ = batch[:3] 
+            #     # mix_, target_, text_ = batch # to check if it works (in line with original for non-text)
+            #     print(f"[VALIDATION DEBUG] Before enhance call, text available: {text is not None}")
+            #     print(f"[VALIDATION DEBUG] Text sample: {text[0] if text is not None else 'None'}")
+            #     est = self.enhance(mix_, rng=self.rng, text=text_)
+            # else:
+            #     # mix_, target_ = batch[:2]
+            #     mix_, target_ = batch # to check if it works (per original)
+            #     print(f"[VALIDATION DEBUG] Before enhance call, not using text")
+            #     est = self.enhance(mix_, rng=self.rng)
+            
+            # ------------- enhancement with mask --------------
             if self.have_text:
-                mix_, target_, text_ = batch[:3] 
-                # mix_, target_, text_ = batch # to check if it works (in line with original for non-text)
-                print(f"[VALIDATION DEBUG] Before enhance call, text available: {text is not None}")
-                print(f"[VALIDATION DEBUG] Text sample: {text[0] if text is not None else 'None'}")
-                est = self.enhance(mix_, rng=self.rng, text=text_)
+                mix_, target_, text_, mask_ = mix_raw, target_raw, text, mask
+                est = self.enhance(mix_, rng=self.rng, text=text_, mask=mask_)
             else:
-                # mix_, target_ = batch[:2]
-                mix_, target_ = batch # to check if it works (per original)
-                print(f"[VALIDATION DEBUG] Before enhance call, not using text")
-                est = self.enhance(mix_, rng=self.rng)
+                mix_, target_, mask_ = mix_raw, target_raw, mask
+                est = self.enhance(mix_, rng=self.rng, mask=mask_)
+
+            # zero‑out padding region in the estimate so metrics ignore it
+            if mask_ is not None:
+                est = est * mask_.unsqueeze(1)
+                target_ = target_ * mask_.unsqueeze(1)
             
             # Log validation text metrics
             if self.have_text and hasattr(self, 'text_metrics') and self.text_metrics:
