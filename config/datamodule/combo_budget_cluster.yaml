@@ -4,7 +4,7 @@ _target_: open_universe.datasets.DataModule
 mode: bucket_budget         # fixed | bucket_bs | bucket_budget
 fixed_len_sec: 4.0          # only for mode=fixed
 batch_size: 4               # for fixed / bucket_bs
-budget_sec: 12.0 # 18.0 # 12.0     # for bucket_budget # Cluster: 24.0 = 1h 22min per epoch; 18.0 = 1h 05min per epoch
+budget_sec: 18.0 # 18.0 # 12.0     # for bucket_budget # Cluster: 24.0 = 1h 22min per epoch; 18.0 = 1h 05min per epoch; 12.0 = 1h 16min per epoch
 width_pct: null # 0.05             # bucket tolerance (fallback)
 width_sec: 0.25             # (use one or the other)
 order: asc   # asc          # asc | desc | rand             (bucket modes)
@@ -48,7 +48,7 @@ datasets:
         fs: 16000
         split: train
         # max clip length kept in **all** modes
-        audio_len: 12.0 
+        audio_len: 18.0 
         part_used: 1.0 # 0.1 # 1.0 # 0.01  # Use only 5% of data
 
     vb-val-16k: # NORMAL
@@ -58,7 +58,7 @@ datasets:
         fs: ${..vb-train-16k.fs}
         split: val
         # max clip length kept in **all** modes
-        audio_len: 12.0 # UPDATE: 4 seconds here too
+        audio_len: 18.0 # UPDATE: 4 seconds here too
         part_used: 1.0 # 0.1 # 1.0  # Use 20% of validation data for faster validation
 
     vb-test-16k:
@@ -68,5 +68,5 @@ datasets:
         fs: ${..vb-train-16k.fs}
         split: test
         # max clip length kept in **all** modes
-        audio_len: 12.0 # UPDATE: 4 seconds here too
+        audio_len: 18.0 # UPDATE: 4 seconds here too
         part_used: 1.0  # Use full test set for final evaluation
