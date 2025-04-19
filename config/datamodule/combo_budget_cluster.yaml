@@ -48,7 +48,7 @@ datasets:
         fs: 16000
         split: train
         # max clip length kept in **all** modes
-        audio_len: 24.0
+        audio_len: 18.0 # Cluster: 24.0 = 1h 22min per epoch
         part_used: 1.0 # 0.1 # 1.0 # 0.01  # Use only 5% of data
 
     vb-val-16k: # NORMAL

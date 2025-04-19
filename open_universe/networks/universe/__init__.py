@@ -177,6 +177,16 @@ from .textencoder_plbert_op import TextEncoder
 from .score import ScoreNetwork
 
 
+# # 18 Apr version = 18 Apr + adding text masking
+from .condition_18Apr import ConditionerNetwork 
+from .m_universe_gan_NS2_adj2 import UniverseGAN
+from .textencoder_plbert_op import TextEncoder
+from .score import ScoreNetwork
+
+
+
+
+
 
 # # # Trying WavLM
 # # from .condition_NS_plbert_adj import ConditionerNetwork 

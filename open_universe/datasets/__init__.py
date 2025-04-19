@@ -42,8 +42,8 @@ Author: Robin Scheibler (@fakufaku)
 # from .m_datamodule_pad import DataModule
 # from .m_static_dataset_NS_4sec_pad import NoisyDataset
 
-from .m_datamodule_pad2 import DataModule
-from .m_static_dataset_NS_4sec_pad2 import NoisyDataset
+# from .m_datamodule_pad2 import DataModule
+# from .m_static_dataset_NS_4sec_pad2 import NoisyDataset
 
 
 # 19 Apr: Combined version of all three options
