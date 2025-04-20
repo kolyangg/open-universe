@@ -1,11 +1,11 @@
 _target_: open_universe.datasets.DataModule
 
 # ---------------- global batching switches --------------------------- #
-mode: bucket_bs         # fixed | bucket_bs | bucket_budget
+mode: fixed         # fixed | bucket_bs | bucket_budget
 fixed_len_sec: 4.0          # only for mode=fixed
 batch_size: 4               # for fixed / bucket_bs
 budget_sec: 12.0 # 12.0     # for bucket_budget # 12.0 good for local
-width_pct: 0.05 # 0.05             # bucket tolerance (fallback)
+width_pct: 0.10 # 0.05             # bucket tolerance (fallback)
 width_sec: null # 0.25             # (use one or the other)
 order: asc   # asc          # asc | desc | rand             (bucket modes)
 
@@ -19,7 +19,7 @@ train:
     dataset: vb-train-16k
     dl_opts:
         pin_memory: true
-        num_workers: 12 #  # 24 # 6
+        num_workers: 12 # 24 # 6
         shuffle: true
         # batch_size is ignored when mode=bucket_budget
         batch_size: 4 # 8 # 4 # 8 # 15 # 15 # 8 # 10  # == 40 with 4 GPUs

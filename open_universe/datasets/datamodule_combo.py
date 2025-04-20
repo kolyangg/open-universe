@@ -64,13 +64,21 @@ class _BucketSampler(BatchSampler):
         self.width_frames = int(width_sec * fs) if width_sec else None
         # ids = sorted(range(len(lengths)), key=lengths.__getitem__)
         
-        # use Lightning‑provided sampler order when distributed
-        ids = list(sampler) if sampler is not None \
-              else sorted(range(len(lengths)), key=lengths.__getitem__)
+        # # use Lightning‑provided sampler order when distributed
+        # ids = list(sampler) if sampler is not None \
+        #       else sorted(range(len(lengths)), key=lengths.__getitem__)
 
-        if order == "desc": ids.reverse()
-        elif order == "rand": random.shuffle(ids)
-        self.ids = ids
+        # if order == "desc": ids.reverse()
+        # elif order == "rand": random.shuffle(ids)
+        # self.ids = ids
+        
+        # keep the DistributedSampler shard *but* order it by length
+        ids = list(sampler) if sampler is not None else list(range(len(lengths)))
+        ids.sort(key=lengths.__getitem__)          # ①  sort ascending
+        if   order == "desc": ids.reverse()        # ②  optional desc
+        elif order == "rand": random.shuffle(ids)  # ③  or random
+        self.ids = ids                             # ④  save
+        
         self.width_pct = width_pct
 
     def _same_bucket(self, a, b):
@@ -82,7 +90,8 @@ class _BucketSampler(BatchSampler):
 
 class BucketBatchSampler(_BucketSampler):
     def __init__(self, lengths, batch_size, sampler = None, **kw):
-        super().__init__(lengths, **kw)
+        # super().__init__(lengths, **kw)
+        super().__init__(lengths, sampler=sampler, **kw)   # ← keep distributed sam
         self.bs = batch_size
         self.buckets, cur = [], [self.ids[0]]
         for i in self.ids[1:]:
@@ -105,7 +114,8 @@ class BucketBatchSampler(_BucketSampler):
 
 class VariableBatchSampler(_BucketSampler):
     def __init__(self, lengths, budget_frames, sampler = None, **kw):
-        super().__init__(lengths, **kw)
+        # super().__init__(lengths, **kw)
+        super().__init__(lengths, sampler=sampler, **kw)   # ← keep distributed sampler
         self.budget = budget_frames
         self.buckets, cur = [], [self.ids[0]]
         for i in self.ids[1:]:
@@ -166,10 +176,11 @@ class DataModule(pl.LightningDataModule):
         if self.mode == "fixed":
             opt = dict(self.split_cfg["train"].dl_opts)
             opt.pop("shuffle", None)               # avoid duplicate
+            batch_sz = opt.pop("batch_size", self.h["batch_size"])
             return DataLoader(
                 ds,
-                # batch_size=h["batch_size"],
-                # shuffle=True,
+                batch_size=batch_sz,
+                shuffle=True, # let Lightning inject DistributedSampler
                 collate_fn=self.collate_fn,
                 **opt,
             )
