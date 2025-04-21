@@ -1,0 +1,52 @@
+_target_: open_universe.dataset_original.DataModule
+train:
+    dataset: vb-train-16k
+    dl_opts:
+        pin_memory: true
+        num_workers: 12 # 12 is okay  for local
+        shuffle: true
+        batch_size: 6 # 6 # 4 = local time per epoch: 2 = 32 min, 4 = 23min, 6 = 20min, 7 = 21min, 8 = 1h 20 min;
+        # batch_size: 4 is best for wavlm_large (25 min)
+        # batch_size: 6 is best for wavlm_base (20 min)
+val:
+    dataset: vb-val-16k
+    dl_opts:
+        pin_memory: true
+        num_workers: 4
+        shuffle: false
+        batch_size: 1
+test:
+    dataset: vb-test-16k
+    dl_opts:
+        pin_memory: true
+        num_workers: 4
+        shuffle: false
+        batch_size: 1
+
+datasets:
+    vb-train-16k:
+        _target_: open_universe.dataset_original.NoisyDataset
+        audio_path: data/voicebank_demand/16k
+        # text_path: data/voicebank_demand/trainset_28spk_txt  # NEW: path to transcript files
+        fs: 16000
+        split: train
+        audio_len: 2.0
+        # part_used: 1.0 # 0.1 # 1.0 # 0.01  # Use only 5% of data
+
+    vb-val-16k: # NORMAL
+        _target_: open_universe.dataset_original.NoisyDataset
+        audio_path: ${..vb-train-16k.audio_path}
+        # text_path: ${..vb-train-16k.text_path}  # Re-use the same text_path
+        fs: ${..vb-train-16k.fs}
+        split: val
+        audio_len: null
+        # part_used: 1.0 # 0.1 # 1.0  # Use 20% of validation data for faster validation
+
+    vb-test-16k:
+        _target_: open_universe.dataset_original.NoisyDataset
+        audio_path: ${..vb-train-16k.audio_path}
+        # text_path: ${..vb-train-16k.text_path}  # Re-use the same text_path
+        fs: ${..vb-train-16k.fs}
+        split: test
+        audio_len: null
+        # part_used: 1.0  # Use full test set for final evaluation

@@ -177,14 +177,11 @@ from .mdn import MixtureDensityNetworkLoss
 # from .score import ScoreNetwork
 
 
-# # 18 Apr version = 18 Apr + adding text masking
+# # 19 Apr version = 18 Apr + adding text masking
 from .condition_18Apr import ConditionerNetwork 
 from .m_universe_gan_NS2_adj2 import UniverseGAN
 from .textencoder_plbert_op_fix import TextEncoder
 from .score import ScoreNetwork
-
-
-
 
 
 
@@ -195,6 +192,15 @@ from .score import ScoreNetwork
 # from .universe_gan_NS2_adj import UniverseGAN
 # from .textencoder_plbert_op import TextEncoder
 # from .score import ScoreNetwork
+
+
+# # 20 Apr - trying WavLM (v2)
+# from .condition_wv2 import ConditionerNetwork 
+# # from .condition_check import ConditionerNetwork 
+# from .m_universe_gan_NS2_adj2 import UniverseGAN
+# from .textencoder_plbert_op_fix import TextEncoder
+# from .score import ScoreNetwork
+
 
 
 

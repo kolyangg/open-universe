@@ -12,12 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-# Loss Functions
+# Datasets module
 
-Loss functions for speech enhancement.
+Contains the necessary API to load and process data during training.
+
+Author: Robin Scheibler (@fakufaku)
 """
-from .multires_stft import MultiResL1SpecLoss
-from .combine import MultiLoss
-from .phoneme_loss import PhonemeLoss, PhonemeCTCLoss, PhonemeEmbeddingLoss
-
-from .wavlm_loss import WavLMLMOSLoss # NEW WavLM loss
+from .datamodule import DataModule
+from .static_dataset import NoisyDataset
