@@ -16,7 +16,7 @@ seed: 46762398
 
 # ckpt_path: ./exp/universepp_vb_16k_NS2_4s/2025-04-19_09-39-26_/checkpoints/universe/exper/last.ckpt
 # resume bucket_cluster
-ckpt_path: ./exp/exp/bucket_cluster/2025-04-20_12-27-05_/checkpoints/universe/exper/last.ckpt
+ckpt_path: ./exp/bucket_cluster/2025-04-20_12-27-05_/checkpoints/universe/exper/last.ckpt
 
 
 train: true
