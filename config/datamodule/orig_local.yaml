@@ -5,7 +5,7 @@ train:
         pin_memory: true
         num_workers: 12 # 12 is okay  for local
         shuffle: true
-        batch_size: 6 # 6 is in line with wavlm_base testing
+        batch_size: 4 # 6 # 4 or 6 to be in line with wavlm_base testing
 
 val:
     dataset: vb-val-16k

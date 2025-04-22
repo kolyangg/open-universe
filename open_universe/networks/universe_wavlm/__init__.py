@@ -36,3 +36,12 @@ from .score import ScoreNetwork
 from .universe_gan_NS_wv_loss import UniverseGAN # try WavLM loss instead of Mel
 
 
+
+# 21 Apr - trying WavLM (v3) - adjusting to improve perf
+from .condition_wv4 import ConditionerNetwork
+from .textencoder_plbert_op_fix import TextEncoder
+from .score import ScoreNetwork
+from .universe_gan_NS_wv_loss import UniverseGAN # WavLM loss instead of Mel
+
+
+

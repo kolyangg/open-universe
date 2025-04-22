@@ -5,7 +5,7 @@ train:
         pin_memory: true
         num_workers: 12 # 12 is okay  for local
         shuffle: true
-        batch_size: 6 # 6 # 4 = local time per epoch: 2 = 32 min, 4 = 23min, 6 = 20min, 7 = 21min, 8 = 1h 20 min;
+        batch_size: 4 # 6 # 4 = local time per epoch: 2 = 32 min, 4 = 23min, 6 = 20min, 7 = 21min, 8 = 1h 20 min;
         # batch_size: 4 is best for wavlm_large (25 min)
         # batch_size: 6 is best for wavlm_base (20 min)
 val:
