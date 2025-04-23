@@ -7,6 +7,8 @@ defaults:
 
 seed: 46762398
 ckpt_path: null
+
+
 # ckpt_path: checkpoints/universe/exper/last.ckpt
 # ckpt_path: ./exp/universepp_vb_16k_NS2_wv/2025-04-12_18-31-56_/checkpoints/universe/exper/last.ckpt
 # ckpt_path: ./exp/universepp_vb_16k_NS2_4s/2025-04-14_11-27-04_/checkpoints/universe/exper/last.ckpt
@@ -18,6 +20,8 @@ ckpt_path: null
 
 # resume bucket_cluster
 # ckpt_path: ./exp/bucket_cluster/2025-04-20_12-27-05_/checkpoints/universe/exper/last.ckpt
+
+# ckpt_path: ./exp/orig_local/2025-04-22_08-55-23_/checkpoints/universe/exper/last.ckpt # resume orig_local model
 
 
 train: true
