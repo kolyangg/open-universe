@@ -1,41 +1,62 @@
-_target_: open_universe.dataset_aligned.WordCutDataModule   # new DM class
+_target_: open_universe.dataset_aligned.DataModule      # updated path
 
-batch_size: 4        # keep a single global knob; mode/fixed_len no longer used
-                     # (each sample is always win_len_sec)
+# ------------------------------------------------------------------ #
+# where to dump the very first few batches for inspection
+test_sample_folder: data/debug_batch_dumps   # "" or null ⇒ disable
+test_sample_batches: 3                      # dump the first 3 batches
+# ------------------------------------------------------------------ #
+
 
 
 train:
-  dataset: vb-train-word
-  dl_opts: {batch_size: 4, num_workers: 12, pin_memory: true, shuffle: true}
+  dataset: vb-train-cut
+  dl_opts: {batch_size: 8, num_workers: 12, shuffle: true,  pin_memory: true}
+
 val:
-  dataset: vb-val-word
-  dl_opts: {batch_size: 1, num_workers: 4,  pin_memory: true, shuffle: false}
+  dataset: vb-val-cut
+  dl_opts: {batch_size: 1, num_workers: 4,  shuffle: false, pin_memory: true}
+
 test:
-  dataset: vb-val-word
-  dl_opts: {batch_size: 1, num_workers: 4,  pin_memory: true, shuffle: false}
+  dataset: vb-test-cut
+  dl_opts: {batch_size: 1, num_workers: 4,  shuffle: false, pin_memory: true}
 
 datasets:
-  vb-train-word:
-    _target_: open_universe.dataset_aligned.WordCutDataset
-    audio_root: data/voicebank_demand/16k
-    textgrid_root: data/voicebank_demand/textgrids          # pre‑computed TextGrids
+  vb-train-cut:
+    _target_: open_universe.dataset_aligned.NoisyDataset
+    audio_path: data/voicebank_demand/16k
+    text_path : data/voicebank_demand/trainset_28spk_txt
+    textgrid_root: data/voicebank_demand/textgrids
     split: train
     fs: 16000
-    win_len_sec: 2.0 # 2.0
-    min_cut_sec: 0.5 # 1.0
-    max_cut_sec: 2.0 # 2.0
-    num_samples_per_audio: 1
-    repeat_sample: true
-    part_used: 1.0
-    
+    # word-cut hyper-params
+    win_len_sec:         2.0
+    min_cut_sec:         0.2
+    max_cut_sec:         2.0
+    num_samples_audio:   1
+    p_random:            1.0
+    big_cut_min:         0.75
+    starting_noise_min:  0.0
+    starting_noise_max:  0.2
+    spacing_min:         0.1
+    spacing_max:         0.2
+    part_used:           1.0
 
-  vb-val-word:
-    _target_: open_universe.dataset_aligned.WordCutDataset
-    audio_root: ${..vb-train-word.audio_root}
-    textgrid_root: ${..vb-train-word.textgrid_root}
+  vb-val-cut:
+    _target_: open_universe.dataset_aligned.NoisyDataset
+    audio_path: ${..vb-train-cut.audio_path}
+    text_path : ${..vb-train-cut.text_path}
+    textgrid_root: ${..vb-train-cut.textgrid_root}
     split: val
     fs: 16000
-    win_len_sec: 2.0          # still needed for mask length
-    num_samples_per_audio: 1
-    repeat_sample: false
+    win_len_sec: 2.0      # <- keep same len; no word-cut randomness
+    part_used: 1.0
+
+  vb-test-cut:
+    _target_: open_universe.dataset_aligned.NoisyDataset
+    audio_path: ${..vb-train-cut.audio_path}
+    text_path : ${..vb-train-cut.text_path}
+    textgrid_root: ${..vb-train-cut.textgrid_root}
+    split: test
+    fs: 16000
+    win_len_sec: 2.0
     part_used: 1.0

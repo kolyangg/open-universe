@@ -1,155 +1,334 @@
+
 # SPDX‑License‑Identifier: Apache‑2.0
 """
-Random word‑aligned windows on‑the‑fly, using pre‑computed TextGrids.
-Template follows the original NoisyDataset style (to_absolute_path, logging).
+Dataset with optional pad‑to‑fixed‑length for training
+and mask support for all splits.
+
+Compatible with the old config that used
+    audio_len: 4.0
+If that key is present we treat it as `max_len_sec`.
 """
 from __future__ import annotations
-import math, random, logging, os
+import os, logging, random
 from pathlib import Path
-from typing import Tuple, List, Union
-import textgrid, torch, torchaudio
+from typing import Optional, Tuple, Union
+import torch, torchaudio
 from hydra.utils import to_absolute_path
+import textgrid, random, math
+
 
 log = logging.getLogger(__name__)
 
+def reindex_blocks(blocks):
+    out, cursor = [], 0
+    for s_old, e_old, txt in blocks:
+        length = e_old - s_old
+        out.append((cursor, cursor + length, txt))
+        cursor += length
+    return out
 
-class WordCutDataset(torch.utils.data.Dataset):
+
+
+class NoisyDataset(torch.utils.data.Dataset):
     # ------------------------------------------------------------------ #
     def __init__(
         self,
-        audio_root: Union[str, Path],
-        textgrid_root: Union[str, Path],
+        audio_path: Union[str, Path],
         *,
-        split: str = "train",
-        fs: int = 16_000,
-        win_len_sec: float | None = 4.0,      # None → keep full file
-        min_cut_sec: float = 0.5,
-        max_cut_sec: float = 2.0,
-        num_samples_per_audio: int = 2,
-        repeat_sample: bool = False,
-        part_used: float = 1.0,
+        max_len_sec:  float | None = None,      # filter ≥ this length
+        audio_len:    float | None = None,      # ← alias for max_len_sec
+        fixed_len_sec: float | None = None,     # pad‑to‑len (train only)
+        fs:           int   = 16_000,
+        split:        str   = "train",
+        noisy_folder: str   = "noisy",
+        clean_folder: str   = "clean",
+        text_path:    str | None = None,
+        part_used:    float = 1.0,
+        # -------------- word-cut parameters (new) ------------------- #
+        win_len_sec:       float = 2.0,
+        min_cut_sec:       float = 0.2,
+        max_cut_sec:       float = 2.0,
+        num_samples_audio: int   = 1,
+        p_random:          float = 1.0,
+        big_cut_min:       float = 0.75,
+        starting_noise_min: float = 0.0,
+        starting_noise_max: float = 0.2,
+        spacing_min:       float = 0.1,
+        spacing_max:       float = 0.2,
+        textgrid_root:     str   | None = None,
     ):
         super().__init__()
 
-        self.fs = fs
-        self.K  = num_samples_per_audio if split == "train" else 1
-        self.do_cut = split == "train" and win_len_sec is not None
+        # backward‑compat alias
+        if max_len_sec is None and audio_len is not None:
+            max_len_sec = audio_len
+        if max_len_sec is None:
+            max_len_sec = 1e9            # effectively no limit
 
-        self.win_N = int(win_len_sec * fs) if win_len_sec else None
-        self.min_N = int(min_cut_sec * fs) if win_len_sec else None
-        self.max_N = int(max_cut_sec * fs) if win_len_sec else None
-        self.repeat = repeat_sample
+        self.fixed_len = int(fixed_len_sec * fs) if fixed_len_sec else None
+        self.max_len   = int(max_len_sec  * fs)
+        self.fs        = fs
+        self.split     = split
 
-        root = Path(to_absolute_path(str(audio_root))) / split
-        self.clean = root / "clean"
-        self.noisy = root / "noisy"
-        # self.tgdir = Path(to_absolute_path(str(textgrid_root))) / split / "align_textgrids"
-        self.tgdir = Path(to_absolute_path(str(textgrid_root))) / split
+        root = Path(to_absolute_path(str(audio_path))) / split
+        self.noisy_path = root / noisy_folder
+        self.clean_path = root / clean_folder
+        self.clean_available = self.clean_path.exists()
 
         # --------------------------- file list ---------------------------
-        exts = ("*.wav", "*.flac", "*.ogg", "*.mp3")
-        self.files: List[Path] = []
-        for pat in exts:
-            self.files.extend(self.clean.glob(pat))
-        self.files = sorted(self.files)
+        files = sorted(os.listdir(self.noisy_path))
+        if self.clean_available:
+            files = sorted(set(files) & set(os.listdir(self.clean_path)))
         if part_used < 1.0:
-            self.files = self.files[: max(1, int(len(self.files) * part_used))]
+            files = files[: max(1, int(len(files) * part_used))]
 
-        if not self.files:
-            raise ValueError(
-                f"No audio files found in {self.clean} (checked {', '.join(exts)})"
-            )
+        # filter on length
+        self.file_list, self.lengths = [], []
+        for f in files:
+            n = torchaudio.info(str(self.noisy_path / f)).num_frames
+            if n <= self.max_len:
+                self.file_list.append(f)
+                self.lengths.append(n)
 
-        # --------------------------- cache intervals --------------------
-        self.intervals: List[List[Tuple[int, int, str]]] = []
+        self.text_path = Path(to_absolute_path(text_path)) if text_path else None
+        log.info(
+            f"[{split}] {len(self.file_list)} files (≤ {max_len_sec}s) "
+            f"fixed_len={fixed_len_sec}"
+        )
             
-        keep_files, keep_iv = [], []
-        
-        for wav in self.files:
-            tg_path = self.tgdir / f"{wav.stem}.TextGrid"
-            if not tg_path.exists():
-                print(f"[dbg] No TextGrid for {wav.name} – skipped.")
-                continue
-            tg = textgrid.TextGrid.fromFile(str(tg_path))
             
-            tier = next(t for t in tg.tiers if "word" in t.name.lower())
-            iv = [
-                (int(w.minTime * fs), int(w.maxTime * fs), w.mark.strip())
-                for w in tier.intervals
-                if w.mark.strip()
-            ]
+        # ---- cache word intervals for *all* splits -------------------
+        self.tgdir = Path(to_absolute_path(str(textgrid_root))) / split if textgrid_root else None
 
-            keep_files.append(wav)
-            keep_iv.append(iv)
+        if self.tgdir:                     # ← build once, whatever the split
+            self.win_N  = int(win_len_sec   * fs)
+            self.min_N  = int(min_cut_sec   * fs)
+            self.max_N  = int(max_cut_sec   * fs)
+            self.K      = num_samples_audio
+            self.rng    = random.Random("wordcut")
+            self.ivs    = []
+            
+            for fn in self.file_list:
+                tg_path = self.tgdir / f"{Path(fn).stem}.TextGrid"
+                if not tg_path.exists():               # ① no TextGrid → warn & continue
+                    print(f"[dbg] TextGrid missing → words ignored for {fn}")
+                    self.ivs.append([])                # keep index alignment
+                    continue
 
-        self.files      = keep_files
-        self.intervals  = keep_iv
-        log.info(f"[{split}] {len(self.files)} wavs × {self.K} samples "
-                 f"(TextGrid missing for {len(exts)-len(self.files)} files)")
-        
-        print(f"[{split}] {len(self.files)} wavs × {self.K} samples "
-                 f"(TextGrid missing for {len(exts)-len(self.files)} files)")
+                tg   = textgrid.TextGrid.fromFile(str(tg_path))
+                tier = next((t for t in tg.tiers if "word" in t.name.lower()), None)
+                if tier is None:                       # unlikely, but be safe
+                    self.ivs.append([])
+                    continue
+
+                iv = [(int(i.minTime*fs),
+                    int(i.maxTime*fs),
+                    i.mark.strip())
+                    for i in tier.intervals if i.mark.strip()]
+                self.ivs.append(iv)
+                
+        # init other variables
+        self.p_random = p_random
+        self.big_cut_min = big_cut_min
+        self.starting_noise_min = starting_noise_min
+        self.starting_noise_max = starting_noise_max
+        self.spacing_min = spacing_min
+        self.spacing_max = spacing_max
 
 
     # ------------------------------------------------------------------ #
-    def __len__(self): return len(self.files) * self.K
+    def __len__(self): return len(self.file_list)
 
-    # ------------------------- helpers --------------------------------- #
-    def _choose_cut(self, iv, wav_N):
-        bounds = {0, wav_N}
-        for s, e, _ in iv:
-            bounds.update([s, e])
-        bounds = sorted(bounds)
-        valid = [(s, e) for s in bounds for e in bounds
-                 if self.min_N <= e - s <= self.max_N and e > s]
-        return random.choice(valid) if valid else None
-
-    def _tile_or_pad(self, clip: torch.Tensor):
-        if self.win_N is None:                     # keep full length (val/test)
-            return clip, 0
-        if clip.shape[-1] == 0:
-            pad = self.win_N
-            return torch.zeros_like(clip.expand(1, self.win_N)), pad
-        if self.repeat:
-            reps = math.ceil(self.win_N / clip.shape[-1])
-            clip = clip.repeat(1, reps)
-        pad = self.win_N - clip.shape[-1]
-        if pad > 0:
-            clip = torch.nn.functional.pad(clip, (0, pad))
-        return clip[..., : self.win_N], pad
+    def _load(self, p: Path) -> torch.Tensor:
+        wav, sr = torchaudio.load(p)
+        if sr != self.fs:
+            wav = torchaudio.functional.resample(wav, sr, self.fs)
+        return wav
 
     # ------------------------------------------------------------------ #
     def __getitem__(self, idx):
-        fi   = idx // self.K
-        wavN = self.files[fi]
+        fn   = self.file_list[idx]
+        noisy= self._load(self.noisy_path / fn)
+        clean= self._load(self.clean_path / fn) if self.clean_available else torch.zeros_like(noisy)
 
-        wav_c, _ = torchaudio.load(wavN)
-        wav_n, _ = torchaudio.load(self.noisy / wavN.name)
-        wav_N    = wav_c.shape[-1]
+        
+        # ------- word-aligned window ---------------------------------
+        iv      = self.ivs[idx]
+        fs      = self.fs
+        # – deterministic RNG for val/test so every epoch is identical
+        rng     = ( self.rng if self.split == "train"
+                    else random.Random(f"{fn}_{idx}") )
+        
+        tgt_N   = self.win_N
+        min_N   = self.min_N
+        max_N   = self.max_N
 
-        if self.do_cut:
-            cut = self._choose_cut(self.intervals[fi], wav_N)
-            if cut is None:
-                start, end, words = 0, wav_N, []
-            else:
-                s, e = cut
-                start, end = s, e
-                words = [w for s_, e_, w in self.intervals[fi] if s_ >= s and e_ <= e]
+        # --- candidate multi-word spans ------------------------------
+        spans=[]
+        n=len(iv)
+        for i in range(n):
+            for j in range(i,n):
+                s,e=iv[i][0],iv[j][1]
+                if min_N<=e-s<=max_N:
+                    spans.append((s,e," ".join(iv[k][2] for k in range(i,j+1))))
+
+        # --- helper: pick noise slices --------------------------------
+        wav_len=noisy.shape[-1]
+        leading =(0,iv[0][0]) if iv else (0,wav_len)
+        trailing=(iv[-1][1],wav_len) if iv else (0,0)
+        noise_blocks=[]
+        for ns,ne in (leading,trailing):
+            for st in range(ns,ne,max_N):
+                en=min(st+max_N,ne)
+                if en-st>=min_N: noise_blocks.append((st,en))
+        
+        # if no suitable noise blocks exist, fall back to a dummy 1-sample block
+        # (it will be padded in step 3)
+        if not noise_blocks:
+               noise_blocks.append((0, 1))
+
+        # --- window assembly (mirrors make_debug_set) -----------------
+        remaining=tgt_N; cursor=0
+        chosen_src=[]; blocks=[]; mask=torch.ones(tgt_N)
+
+        # optional starting noise
+        # start_N=int(rng.uniform(self.starting_noise_min,self.starting_noise_max)*fs)
+        # if start_N and remaining>=start_N:
+        #     nb=rng.choice(noise_blocks)
+        #     st=rng.randint(nb[0],nb[1]-start_N)
+        #     chosen_src.append((st,st+start_N,""))
+        #     blocks.append((cursor,cursor+start_N,""))
+        #     cursor+=start_N; remaining-=start_N
+            
+        # --- window assembly (mirrors make_debug_set) -----------------
+        remaining = tgt_N
+        cursor    = 0
+        chosen_src, blocks = [], []
+        mask = torch.ones(tgt_N)
+
+        # optional starting noise
+        start_N = int(rng.uniform(self.starting_noise_min,
+                                self.starting_noise_max) * fs)
+        if start_N and remaining >= start_N and noise_blocks:
+
+            nb = rng.choice(noise_blocks)              # pick one candidate
+            avail = nb[1] - nb[0]
+
+            if avail <= start_N:                       # block shorter than demand
+                st, take = nb[0], avail                #   → just take the whole block
+            else:                                      # block long enough
+                st   = rng.randint(nb[0], nb[1] - start_N)
+                take = start_N
+
+            chosen_src.append((st, st + take, ""))     # coords on the source wav
+            blocks     .append((cursor, cursor + take, ""))  # coords in assembled clip
+            cursor    += take
+            remaining -= take
+
+
+        # first (large) cut
+        # big_thr=self.big_cut_min*tgt_N
+        # fit=[c for c in spans if c[1]-c[0]<=remaining]
+        # big=[c for c in fit if c[1]-c[0]>=big_thr]
+        # first=rng.choice(big) if big else max(fit,key=lambda x:x[1]-x[0])
+        # chosen_src.append(first)
+        # blocks.append((cursor,cursor+first[1]-first[0],first[2]))
+        # cursor+=first[1]-first[0]; remaining-=first[1]-first[0]
+        
+        
+        # -------- first (large) cut -------------------------------------------
+        big_thr = self.big_cut_min * tgt_N
+        fit     = [c for c in spans if c[1] - c[0] <= remaining]
+
+        if fit:                                           # ← only if something fits
+            big    = [c for c in fit if c[1] - c[0] >= big_thr]
+            first  = rng.choice(big) if big else max(fit, key=lambda x: x[1] - x[0])
+
+            chosen_src.append(first)
+            length = first[1] - first[0]
+            blocks.append((cursor, cursor + length, first[2]))
+            cursor    += length
+            remaining -= length
         else:
-            start, end, words = 0, wav_N, [w for _, _, w in self.intervals[fi]]
+            first = None          # no speech block fits → clip will be filled with noise
 
-        clip_c, pad = self._tile_or_pad(wav_c[:, start:end])
-        clip_n, _   = self._tile_or_pad(wav_n[:, start:end])
+        # extra cuts with spacing
+        # space_N=int(rng.uniform(self.spacing_min,self.spacing_max)*fs)
+        # pool=[c for c in spans if c is not first]
+        # rng.shuffle(pool) if rng.random()<self.p_random else pool.sort(key=lambda x:x[1]-x[0],reverse=True)
+        # for s,e,w in pool:
+        #     need=e-s+(space_N if space_N else 0)
+        #     if need>remaining or remaining<min_N: continue
+        #     if space_N and noise_blocks:
+        #         nb=rng.choice(noise_blocks)
+        #         st=rng.randint(nb[0],nb[1]-space_N)
+        #         chosen_src.append((st,st+space_N,""))
+        #         blocks.append((cursor,cursor+space_N,""))
+        #         cursor+=space_N; remaining-=space_N
+        #     chosen_src.append((s,e,w))
+        #     blocks.append((cursor,cursor+e-s,w))
+        #     cursor+=e-s; remaining-=e-s
+        
+        
+        # -------- extra cuts with spacing --------------------------------------
+        space_N = int(rng.uniform(self.spacing_min, self.spacing_max) * fs)
+        pool = [c for c in spans if c is not first]
+        pool = rng.sample(pool, len(pool)) if rng.random() < self.p_random \
+            else sorted(pool, key=lambda x: x[1] - x[0], reverse=True)
 
-        if self.win_N:
-            mask = torch.ones(self.win_N); mask[-pad:] = 0
-        else:
-            mask = torch.ones(clip_n.shape[-1])
+        for s, e, w in pool:
+            need = (e - s) + (space_N if space_N else 0)
+            if need > remaining or remaining < self.min_N:
+                continue
 
-        txt = " ".join(words).lower().strip()
+            # ---------- 1) spacing noise (safe) --------------------------------
+            if space_N and noise_blocks:
+                nb      = rng.choice(noise_blocks)          # (ns, ne)
+                avail   = nb[1] - nb[0]
+                take    = min(space_N, avail)               # never larger!
 
-        # debug first sample
-        if idx < 2:
-            print(f"[dbg] {wavN.name} txt='{txt[:60]}' pad={pad}")
+                if take >= self.min_N:                      # still useful
+                    if avail == take:                       # block too short → whole
+                        slice_s, slice_e = nb
+                    else:                                   # long enough → random sub-slice
+                        slice_s = rng.randint(nb[0], nb[1] - take)
+                        slice_e = slice_s + take
 
-        return clip_n, clip_c, txt, mask
+                    chosen_src.append((slice_s, slice_e, ""))          # coords in source
+                    blocks.append((cursor, cursor + take, ""))         # coords in clip
+                    cursor    += take
+                    remaining -= take
+
+            # ---------- 2) the word span itself --------------------------------
+            if e - s <= remaining:
+                chosen_src.append((s, e, w))
+                blocks.append((cursor, cursor + (e - s), w))
+                cursor    += e - s
+                remaining -= e - s
+            if remaining < self.min_N:
+                break
+
+        
+
+        # tail noise fill
+        for ns,ne in noise_blocks:
+            if remaining==0: break
+            take=min(ne-ns,remaining)
+            chosen_src.append((ne-take,ne,""))
+            blocks.append((cursor,cursor+take,""))
+            cursor+=take; remaining-=take
+
+        # pad if any
+        if remaining:
+            mask[-remaining:]=0.
+            pad=torch.zeros_like(clean[:,:remaining])
+            noisy=torch.cat([noisy, pad],-1) if noisy.shape[-1]<tgt_N else noisy
+            clean=torch.cat([clean, pad],-1) if clean.shape[-1]<tgt_N else clean
+
+        # crop/concat selected pieces from source
+        wav_c=torch.cat([clean[:,s:e] for s,e,_ in chosen_src],-1)
+        wav_n=torch.cat([noisy[:,s:e] for s,e,_ in chosen_src],-1)
+
+        txt=" ".join(w for *_,w in reindex_blocks(blocks) if w).lower().strip()
+        return wav_n, wav_c, txt, mask
+

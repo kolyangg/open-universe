@@ -1,103 +1,131 @@
-# SPDX‑License‑Identifier: Apache‑2.0
-"""Lightning DataModule wrapper for WordCutDataset."""
-from __future__ import annotations
+# Copyright 2024 LY Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+A generic pytorch-lightning DataModule object configurble with Hydra
+
+Author: Robin Scheibler (@fakufaku)
+"""
 import pytorch_lightning as pl
-from torch.utils.data import DataLoader
-from hydra.utils import instantiate
-
 import torch
-import logging
-log = logging.getLogger(__name__)
+from hydra.utils import instantiate
+import torchaudio, os
+from pathlib import Path
 
-class WordCutDataModule(pl.LightningDataModule):
-    def __init__(self, train, val, test, datasets, **hp):
-        super().__init__()
-        self.split_cfg = dict(train=train, val=val, test=test)
-        self.ds_cfgs, self.h = datasets, hp
-        
-        # same diagnostic switches as combo version
-        self.do_print  = hp.get("print_collate_log",  True)
-        self.do_wandb  = hp.get("wandb_collate_log",  True)
 
-        
-        # --- fixed‑length → trivial collate: stack tensors -------------
-        def wordcut_collate(batch, *,
-                            do_print=self.do_print,
-                            do_wandb=self.do_wandb):
-            """
-            Stack noisy/clean/mask tensors; pad to the longest sample
-            (normally they are equal already).  Text is a plain list.
-            """
-            noisy, clean, txt, mask = zip(*batch)
-            max_len = max(x.shape[-1] for x in noisy)
+def _pad_to_len(t: torch.Tensor, L: int) -> torch.Tensor:
+    """1-D right-pad (works for [C,T] or [T])"""
+    return torch.nn.functional.pad(t, (0, L - t.shape[-1]))
 
-            n_pad, c_pad, m_pad = [], [], []
-            for n, c, m in zip(noisy, clean, mask):
-                pad = max_len - n.shape[-1]
-                if pad:
-                    n = torch.nn.functional.pad(n, (0, pad))
-                    c = torch.nn.functional.pad(c, (0, pad))
-                    m = torch.nn.functional.pad(m, (0, pad), value=0.0)
-                n_pad.append(n); c_pad.append(c); m_pad.append(m)
 
-            noisy_b = torch.stack(n_pad)
-            clean_b = torch.stack(c_pad)
-            mask_b  = torch.stack(m_pad)
-
-            # ----------- diagnostics (matches datamodule_combo) --------
-            if do_print or do_wandb:
-                T       = noisy_b.shape[-1]
-                pad_pc  = 100 * (1 - mask_b.sum(dim=1) / T)
-                avg_pad = pad_pc.mean().item()
-                max_pad = pad_pc.max().item()
-                if do_print:
-                    print(f"[collate] B={noisy_b.size(0):2d}  max_len={T}  "
-                          f"avg_pad={avg_pad:4.1f}%  max_pad={max_pad:4.1f}%")
-
-                if do_wandb:
-                    try:
-                        import wandb
-                        if wandb.run is not None:
-                            wandb.run.log(
-                                {"batch_checks/avg_pad": avg_pad,
-                                 "batch_checks/max_pad": max_pad,
-                                 "batch_checks/B": noisy_b.size(0),
-                                 "batch_checks/max_len": T},
-                                commit=False,
-                            )
-                    except ImportError:
-                        pass
-
-            return noisy_b, clean_b, list(txt), mask_b
-            
+def max_collator(batch):
+    """Pad to the longest sample and stack."""
+    noisy, clean, txt, mask = zip(*batch)
+    max_len = max(x.shape[-1] for x in noisy)
+    pad_t   = lambda t: torch.nn.functional.pad(t, (0, max_len-t.shape[-1]))
+    noisy = torch.stack([pad_t(x) for x in noisy])
+    clean = torch.stack([pad_t(x) for x in clean])
+    mask  = torch.stack([pad_t(m) for m in mask])
     
-        self.collate_fn = wordcut_collate
+    return noisy, clean, list(txt), mask
 
-    def setup(self, stage=None):
-        self.datasets = {s: instantiate(self.ds_cfgs[c.dataset], _recursive_=False)
-                         for s,c in self.split_cfg.items()}
+
+class DataModule(pl.LightningDataModule):
+    """
+    A PyTorch Lightning DataModule that can be used to train, validate and test
+
+    Parameters
+    ----------
+    train : OmegaConf
+        Configuration for the training dataset
+    val : OmegaConf
+        Configuration for the validation dataset
+    test : OmegaConf
+        Configuration for the test dataset
+    datasets : Dict[str, Any]
+        A dictionary with the config of all possible datasets
+    """
+
+    def __init__(self, train, val, test, datasets,
+                 test_sample_folder: str | None = None,
+                 test_sample_batches: int = 0):
+        super().__init__()
+        self.cfg = dict(train=train, val=val, test=test)
+        self.datasets_list = datasets
+        self.datasets = {}
+        
+        
+        # ---------- new debug-dump settings -------------------------
+        self._dump_dir  = Path(test_sample_folder) if test_sample_folder else None
+        self._dump_max  = max(0, test_sample_batches)
+        self._dump_cnt  = 0
+        if self._dump_dir:
+            print(f"Debug dump dir: {self._dump_dir}")
+            (self._dump_dir/'clean').mkdir(parents=True, exist_ok=True)
+            (self._dump_dir/'noisy').mkdir(parents=True, exist_ok=True)
+            (self._dump_dir/'txt'  ).mkdir(parents=True, exist_ok=True)
+        
+        # ------------ build collator (captures `self`) ------------------
+        self.collate_fn = self._make_collator()
+        
+     # ------------------------------------------------------------------ #
+    def _make_collator(self):
+        """Return a closure so it can access self.*"""
+        def collate(batch):
+            noisy, clean, txt, mask = zip(*batch)
+            L = max(x.shape[-1] for x in noisy)
+
+            noisy = torch.stack([_pad_to_len(x, L) for x in noisy])
+            clean = torch.stack([_pad_to_len(x, L) for x in clean])
+            mask  = torch.stack([_pad_to_len(m, L) for m in mask])
+
+            # ------ optional one-time export of the very first batches ------
+            if self._dump_dir and self._dump_cnt < self._dump_max:   # <- use the _-prefixed vars
+                sr = 16_000
+                B  = noisy.shape[0]
+                for i in range(B):
+                    uid = f"b{self._dump_cnt:02d}_{i:02d}"
+                    torchaudio.save(self._dump_dir/'noisy'/f"{uid}.wav",
+                                    noisy[i].cpu(), sr)
+                    torchaudio.save(self._dump_dir/'clean'/f"{uid}.wav",
+                                    clean[i].cpu(), sr)
+                    (self._dump_dir/'txt'/f"{uid}.txt").write_text(txt[i])
+                self._dump_cnt += 1                                # <- update the counter
+
+            return noisy, clean, list(txt), mask
+        return collate
+
+    
+
+    def setup(self, *args, **kwargs):
+        for split in ["train", "val", "test"]:
+            ds_name = self.cfg[split].dataset
+            self.datasets[split] = instantiate(
+                self.datasets_list[ds_name], _recursive_=False
+            )
+
+    def _get_dataloader(self, split):
+        return torch.utils.data.DataLoader(
+            self.datasets[split],
+            collate_fn=self.collate_fn, 
+            **self.cfg[split].dl_opts,
+        )
 
     def train_dataloader(self):
-        cfg = self.split_cfg["train"].dl_opts
-        return DataLoader(self.datasets["train"],
-                          batch_size=cfg.batch_size,
-                          shuffle=True,
-                          num_workers=cfg.num_workers,
-                          pin_memory=cfg.pin_memory,
-                          collate_fn=self.collate_fn)
+        return self._get_dataloader("train")
 
     def val_dataloader(self):
-        cfg = self.split_cfg["val"].dl_opts
-        return DataLoader(self.datasets["val"],
-                          batch_size=cfg.batch_size,
-                          shuffle=False,
-                          collate_fn=self.collate_fn,
-                          num_workers=cfg.num_workers)
+        return self._get_dataloader("val")
 
     def test_dataloader(self):
-        cfg = self.split_cfg["test"].dl_opts
-        return DataLoader(self.datasets["test"],
-                          batch_size=cfg.batch_size,
-                          shuffle=False,
-                          collate_fn=self.collate_fn,
-                          num_workers=cfg.num_workers)
+        return self._get_dataloader("test")

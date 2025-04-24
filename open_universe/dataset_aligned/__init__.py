@@ -21,5 +21,5 @@ Author: Robin Scheibler (@fakufaku)
 
 # 22 Apr: Aligned versions
 
-from .datamodule_aligned import WordCutDataModule
-from .static_dataset_aligned import WordCutDataset
+from .datamodule_aligned import DataModule
+from .static_dataset_aligned import NoisyDataset
