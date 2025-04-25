@@ -141,7 +141,7 @@ nvidia-nvjitlink-cu12==12.4.127
 nvidia-nvtx-cu12==12.4.127
 omegaconf==2.3.0
 onnxruntime==1.20.1
-open_universe==0.1.dev111+gc028a54.d20250420
+# open_universe==0.1.dev111+gc028a54.d20250420
 opencv-python==4.11.0.86
 openphonemizer==0.1.2
 optuna==4.3.0
