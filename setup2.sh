@@ -14,7 +14,7 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 
 # 1. make sure conda-forge is *first* so its ready-made wheels win
 conda config --add channels conda-forge 2>/dev/null || true
-conda config --set channel_priority strict
+conda config --set channel_priority flexible
 
 # ----------------------------------------------------------------------------- #
 # Create / update the environment
