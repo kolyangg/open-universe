@@ -11,7 +11,7 @@ if conda env list | awk '{print $1}' | grep -Fxq "universe"; then
 else
     echo "Creating conda environment 'universe'..."
     conda config --append channels conda-forge
-    conda env create -f models/universe/environment2.yaml
+    conda env create -f models/universe/environment_port.yaml
 fi
 
 # Activate the newly created environment
