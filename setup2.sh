@@ -5,7 +5,7 @@
 set -euo pipefail
 
 ENV_NAME="universe"
-ENV_FILE="models/universe/environment_port.yaml"
+ENV_FILE="models/universe/environment_port2.yaml"
 
 # ----------------------------------------------------------------------------- #
 # Initialise conda and enforce channel order
