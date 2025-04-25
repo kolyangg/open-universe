@@ -188,7 +188,7 @@ pylatexenc==2.10
 pyparsing==3.2.0
 PyQt5==5.15.10
 PyQt5_sip==12.13.0
-pyroomacoustics==0.8.3
+# pyroomacoustics==0.8.3
 PySocks==1.7.1
 pystoi==0.4.1
 pytest==7.4.4
