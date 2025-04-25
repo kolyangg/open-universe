@@ -3,8 +3,8 @@
 # Exit on error
 set -e
 
-echo "Downloading main repo"
-git clone https://github.com/kolyangg/speech_enh.git
+# echo "Downloading main repo"
+# git clone --recursive https://github.com/kolyangg/speech_enh.git
 
 echo "Downloading _miipher repo"
 mkdir _miipher
