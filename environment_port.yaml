@@ -1,9 +1,9 @@
 name: universe
 channels:
+  - conda-forge
   - pytorch
   - nvidia
   - defaults
-  - conda-forge
 dependencies:
   - compilers          # <-- OR gxx_linux-64 gcc_linux-64 cmake
   - _libgcc_mutex=0.1
