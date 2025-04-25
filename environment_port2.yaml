@@ -306,7 +306,7 @@ dependencies:
       - nvidia-nvtx-cu11==11.7.91
       - nvidia-nvtx-cu12==12.1.105
       - omegaconf==2.3.0
-      - open-universe==0.1.dev12+ga7c298a.d20250304
+      # - open-universe==0.1.dev12+ga7c298a.d20250304
       - openphonemizer==0.1.2
       - orjson==3.10.15
       - pandas==2.2.3
