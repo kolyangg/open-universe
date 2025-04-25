@@ -20,6 +20,6 @@ echo "Setting up environment..."
 models/universe/setup_simple.sh
 
 echo "Downloading data..."
-python3 models/universe/utils/dataset_download.py
+models/universe/data/prepare_voicebank_demand.sh
 
 echo "Ready to go"
