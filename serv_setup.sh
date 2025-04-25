@@ -6,8 +6,9 @@ set -e
 # echo "Downloading main repo"
 # git clone --recursive https://github.com/kolyangg/speech_enh.git
 # cd speech_enh
-# this script
-# 
+
+# call this script
+# models/universe/serv_setup.sh
 
 echo "Downloading _miipher repo"
 mkdir _miipher
@@ -19,6 +20,6 @@ echo "Setting up environment..."
 models/universe/setup_simple.sh
 
 echo "Downloading data..."
-python3 utils/dataset_download.py
+python3 models/universe/utils/dataset_download.py
 
 echo "Ready to go"

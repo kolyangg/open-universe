@@ -7,9 +7,11 @@ cd ~/speech_enh
 
 echo "Create universe env"
 source activate base
-conda create -n universe python=3.11.11
+conda create -n universe python=3.11.11 -y
+conda activate universe
+echo "universe env created and activated"
 
-echo "universe env created - installing torch and pre-requirements"
+echo "installing torch and pre-requirements"
 pip install torch==2.5.1 torchvision torchaudio==2.5.1
 
 sudo apt update
