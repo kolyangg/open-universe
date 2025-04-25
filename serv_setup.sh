@@ -5,6 +5,9 @@ set -e
 
 # echo "Downloading main repo"
 # git clone --recursive https://github.com/kolyangg/speech_enh.git
+# cd speech_enh
+# this script
+# 
 
 echo "Downloading _miipher repo"
 mkdir _miipher
