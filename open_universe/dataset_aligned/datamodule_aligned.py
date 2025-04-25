@@ -57,8 +57,10 @@ class DataModule(pl.LightningDataModule):
     """
 
     def __init__(self, train, val, test, datasets,
-                 test_sample_folder: str | None = None,
-                 test_sample_batches: int = 0):
+                 train_sample_folder: str | None = None,
+                 train_sample_batches: int = 0,
+                 val_sample_folder: str | None = None,
+                 val_sample_batches: int = 0):
         super().__init__()
         self.cfg = dict(train=train, val=val, test=test)
         self.datasets_list = datasets
@@ -66,43 +68,71 @@ class DataModule(pl.LightningDataModule):
         
         
         # ---------- new debug-dump settings -------------------------
-        self._dump_dir  = Path(test_sample_folder) if test_sample_folder else None
-        self._dump_max  = max(0, test_sample_batches)
-        self._dump_cnt  = 0
-        if self._dump_dir:
-            print(f"Debug dump dir: {self._dump_dir}")
-            (self._dump_dir/'clean').mkdir(parents=True, exist_ok=True)
-            (self._dump_dir/'noisy').mkdir(parents=True, exist_ok=True)
-            (self._dump_dir/'txt'  ).mkdir(parents=True, exist_ok=True)
+        self._dump_cfg = {
+            "train": dict(dir=Path(train_sample_folder) if train_sample_folder else None,
+                          max=max(0, train_sample_batches), cnt=0),
+            "val":   dict(dir=Path(val_sample_folder)   if val_sample_folder   else None,
+                          max=max(0, val_sample_batches),   cnt=0),
+        }
+        for s, d in self._dump_cfg.items():
+            if d["dir"]:
+                print(f"Debug dump for {s}: {d['dir']}")
+                for sub in ("clean", "noisy", "txt"):
+                    (d["dir"]/sub).mkdir(parents=True, exist_ok=True)
         
-        # ------------ build collator (captures `self`) ------------------
-        self.collate_fn = self._make_collator()
+        
         
      # ------------------------------------------------------------------ #
-    def _make_collator(self):
-        """Return a closure so it can access self.*"""
+    # def _make_collator(self):
+    #     """Return a closure so it can access self.*"""
+    #     def collate(batch):
+    #         noisy, clean, txt, mask = zip(*batch)
+    #         L = max(x.shape[-1] for x in noisy)
+
+    #         noisy = torch.stack([_pad_to_len(x, L) for x in noisy])
+    #         clean = torch.stack([_pad_to_len(x, L) for x in clean])
+    #         mask  = torch.stack([_pad_to_len(m, L) for m in mask])
+
+    #         # ------ optional one-time export of the very first batches ------
+    #         if self._dump_dir and self._dump_cnt < self._dump_max:   # <- use the _-prefixed vars
+    #             sr = 16_000
+    #             B  = noisy.shape[0]
+    #             for i in range(B):
+    #                 uid = f"b{self._dump_cnt:02d}_{i:02d}"
+    #                 torchaudio.save(self._dump_dir/'noisy'/f"{uid}.wav",
+    #                                 noisy[i].cpu(), sr)
+    #                 torchaudio.save(self._dump_dir/'clean'/f"{uid}.wav",
+    #                                 clean[i].cpu(), sr)
+    #                 (self._dump_dir/'txt'/f"{uid}.txt").write_text(txt[i])
+    #             self._dump_cnt += 1                                # <- update the counter
+
+    #         return noisy, clean, list(txt), mask
+    #     return collate
+    
+    
+    def _make_collator(self, split: str):
+        dump = self._dump_cfg[split]
+
         def collate(batch):
             noisy, clean, txt, mask = zip(*batch)
             L = max(x.shape[-1] for x in noisy)
 
-            noisy = torch.stack([_pad_to_len(x, L) for x in noisy])
-            clean = torch.stack([_pad_to_len(x, L) for x in clean])
-            mask  = torch.stack([_pad_to_len(m, L) for m in mask])
+            pad = lambda t: torch.nn.functional.pad(t, (0, L - t.shape[-1]))
+            noisy = torch.stack([pad(x) for x in noisy])
+            clean = torch.stack([pad(x) for x in clean])
+            mask  = torch.stack([pad(m) for m in mask])
 
-            # ------ optional one-time export of the very first batches ------
-            if self._dump_dir and self._dump_cnt < self._dump_max:   # <- use the _-prefixed vars
+            # -------- optional on-the-fly export -----------------
+            if dump["dir"] and dump["cnt"] < dump["max"]:
                 sr = 16_000
-                B  = noisy.shape[0]
-                for i in range(B):
-                    uid = f"b{self._dump_cnt:02d}_{i:02d}"
-                    torchaudio.save(self._dump_dir/'noisy'/f"{uid}.wav",
-                                    noisy[i].cpu(), sr)
-                    torchaudio.save(self._dump_dir/'clean'/f"{uid}.wav",
-                                    clean[i].cpu(), sr)
-                    (self._dump_dir/'txt'/f"{uid}.txt").write_text(txt[i])
-                self._dump_cnt += 1                                # <- update the counter
-
+                for i in range(noisy.shape[0]):
+                    uid = f"b{dump['cnt']:02d}_{i:02d}"
+                    torchaudio.save(dump["dir"] / "noisy" / f"{uid}.wav", noisy[i].cpu(), sr)
+                    torchaudio.save(dump["dir"] / "clean" / f"{uid}.wav", clean[i].cpu(), sr)
+                    (dump["dir"] / "txt" / f"{uid}.txt").write_text(txt[i])
+                dump["cnt"] += 1
             return noisy, clean, list(txt), mask
+
         return collate
 
     
@@ -117,10 +147,11 @@ class DataModule(pl.LightningDataModule):
     def _get_dataloader(self, split):
         return torch.utils.data.DataLoader(
             self.datasets[split],
-            collate_fn=self.collate_fn, 
+            collate_fn=self._make_collator(split),   # ← here we supply "train", "val", or "test"
             **self.cfg[split].dl_opts,
         )
 
+        
     def train_dataloader(self):
         return self._get_dataloader("train")
 

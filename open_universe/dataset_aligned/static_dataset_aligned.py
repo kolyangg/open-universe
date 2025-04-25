@@ -150,18 +150,47 @@ class NoisyDataset(torch.utils.data.Dataset):
         fn   = self.file_list[idx]
         noisy= self._load(self.noisy_path / fn)
         clean= self._load(self.clean_path / fn) if self.clean_available else torch.zeros_like(noisy)
+        
+        
+        # ---------- simple, no-augmentation path for val/test -------------
+        if self.split != "train":
+            txt = ""
+            if self.text_path and (self.text_path / f"{Path(fn).stem}.txt").exists():
+                txt = (self.text_path / f"{Path(fn).stem}.txt").read_text().strip().lower()
+
+            mask = torch.ones(noisy.shape[-1])           # everything is valid
+            return noisy, clean, txt, mask
 
         
-        # ------- word-aligned window ---------------------------------
-        iv      = self.ivs[idx]
-        fs      = self.fs
-        # – deterministic RNG for val/test so every epoch is identical
-        rng     = ( self.rng if self.split == "train"
-                    else random.Random(f"{fn}_{idx}") )
+        # # ------- word-aligned window ---------------------------------
+        # iv      = self.ivs[idx]
         
-        tgt_N   = self.win_N
-        min_N   = self.min_N
-        max_N   = self.max_N
+        # if not iv and self.split == "train":
+        #     # fall back to plain random 2 s crop instead of “speech-free” clip
+        #     total = noisy.shape[-1]
+        #     if total <= self.win_N:
+        #         start = 0
+        #     else:
+        #         start = random.randint(0, total - self.win_N)
+        #     end = start + self.win_N
+        #     mask = torch.ones(self.win_N)
+        #     return noisy[:, start:end], clean[:, start:end], "", mask
+
+        # -------- variables always needed in training ---------------------
+        # make sure they exist even when there is no TextGrid folder
+        if not hasattr(self, "win_N"):
+            self.win_N  = int(self.fixed_len or 2.0 * self.fs)  # default 2 s
+            self.min_N  = int(0.2 * self.fs)
+            self.max_N  = int(2.0 * self.fs)
+
+        # always fetch intervals – may be empty
+        iv = self.ivs[idx] if hasattr(self, "ivs") else []
+
+        fs     = self.fs
+        rng    = self.rng                           # stateful rng only for training
+        tgt_N  = self.win_N
+        min_N  = self.min_N
+        max_N  = self.max_N
 
         # --- candidate multi-word spans ------------------------------
         spans=[]
@@ -330,5 +359,16 @@ class NoisyDataset(torch.utils.data.Dataset):
         wav_n=torch.cat([noisy[:,s:e] for s,e,_ in chosen_src],-1)
 
         txt=" ".join(w for *_,w in reindex_blocks(blocks) if w).lower().strip()
+        
+        
+        # make absolutely sure all returned tensors share the same length
+        if wav_n.shape[-1] < tgt_N:
+            pad = (0, tgt_N - wav_n.shape[-1])
+            wav_n  = torch.nn.functional.pad(wav_n,  pad)
+            wav_c  = torch.nn.functional.pad(wav_c,  pad)
+            mask   = torch.nn.functional.pad(mask,   pad, value=0.0)
+
+                
+        
         return wav_n, wav_c, txt, mask
 

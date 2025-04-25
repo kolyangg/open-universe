@@ -2,10 +2,12 @@ _target_: open_universe.dataset_aligned.DataModule      # updated path
 
 # ------------------------------------------------------------------ #
 # where to dump the very first few batches for inspection
-test_sample_folder: data/debug_batch_dumps   # "" or null ⇒ disable
-test_sample_batches: 3                      # dump the first 3 batches
-# ------------------------------------------------------------------ #
 
+train_sample_folder: data/debug_batch_dumps/train     # "" ⇒ disable
+train_sample_batches: 3
+val_sample_folder:   data/debug_batch_dumps/val
+val_sample_batches:  3
+# ------------------------------------------------------------------ #
 
 
 train:

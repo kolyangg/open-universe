@@ -6,7 +6,7 @@ defaults:
   - _self_
   # - override /datamodule: default_NS # updated
   - override /datamodule: combo_bucket_cluster_notext # save as wavlm_local
-  - override /model: default_orig
+  - override /model: orig_masked # default_orig
   - override /trainer: default
 
 trainer:
