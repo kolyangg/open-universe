@@ -22,7 +22,8 @@ conda install -y -c conda-forge gmpy2 numexpr
 
 #### Install requirements
 echo "installing requirements.txt"
-pip install -r models/universe/univ_requirements.txt
+# pip install -r models/universe/univ_requirements.txt
+pip install -r models/universe/univ_requirements.txt --no-cache-dir
 
 
 ### Other installations (separate)
