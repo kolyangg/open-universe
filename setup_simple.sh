@@ -35,3 +35,7 @@ pip install textgrid
 echo "unzip"
 sudo apt update
 sudo apt install unzip
+
+### Install MFA
+echo "installing MFA for text alignment"
+conda install -c conda-forge montreal-forced-aligner -y
