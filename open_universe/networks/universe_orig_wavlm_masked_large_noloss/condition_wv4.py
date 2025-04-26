@@ -131,8 +131,8 @@ class WavLMAdapter(nn.Module):
                  ds_factor: int,
                  sample_rate: int = 16_000,          # match data SR
                  # model_name: str = "microsoft/wavlm-base",
-                 model_name: str = "microsoft/wavlm-large",
-                 # model_name: str = "microsoft/wavlm-base-sv",
+                 # model_name: str = "microsoft/wavlm-large",
+                 model_name: str = "microsoft/wavlm-base-sv",
                  feature_stage: str = "conv",
                  oversample: int = 2,
                  use_weight_norm: bool = False):

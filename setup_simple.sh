@@ -12,12 +12,13 @@ conda activate universe
 echo "universe env created and activated"
 
 echo "installing torch and pre-requirements"
-pip install torch==2.5.1 torchvision torchaudio==2.5.1
+pip install torch==2.5.1 torchvision torchaudio==2.5.1 --no-cache-dir
 
 sudo apt update
 sudo apt install -y nvidia-cuda-toolkit
 
 conda install -y -c conda-forge gmpy2 numexpr
+conda install -y nvidia::cuda-nvcc # for NVCC v12
 
 
 #### Install requirements

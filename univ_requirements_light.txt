@@ -1,4 +1,4 @@
-absl-py @ file:///croot/absl-py_1714140470852/work
+absl-py
 accelerate==1.4.0
 aiofiles==23.2.1
 aiohappyeyeballs==2.4.4
