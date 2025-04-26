@@ -6,6 +6,10 @@ set -e
 # echo "Downloading main repo"
 # git clone --recursive https://github.com/kolyangg/speech_enh.git
 # cd speech_enh
+# cd models/universe
+# git checkout main
+# cd ~/speech_enh
+
 
 # call this script
 # models/universe/serv_setup.sh
@@ -18,6 +22,8 @@ cd ..
 
 echo "Setting up environment..."
 models/universe/setup_simple.sh
+
+conda activate universe
 
 echo "Downloading data..."
 models/universe/data/prepare_voicebank_demand.sh
