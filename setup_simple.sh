@@ -39,3 +39,5 @@ sudo apt install unzip
 ### Install MFA
 echo "installing MFA for text alignment"
 conda install -c conda-forge montreal-forced-aligner -y
+mfa model download acoustic    english_us_arpa
+mfa model download dictionary  english_us_arpa
