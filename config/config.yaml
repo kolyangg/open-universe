@@ -6,7 +6,7 @@ defaults:
     - experiment: default
 
 seed: 46762398
-# ckpt_path: null
+ckpt_path: null
 
 
 # ckpt_path: checkpoints/universe/exper/last.ckpt
@@ -24,7 +24,8 @@ seed: 46762398
 # ckpt_path: ./exp/orig_local/2025-04-22_08-55-23_/checkpoints/universe/exper/last.ckpt # resume orig_local model
 
 # ckpt_path: ./exp/aligned_local/2025-04-24_18-16-05_/checkpoints/universe/exper/last.ckpt
-ckpt_path: .exp/orig_bucket_cluster/2025-04-25_15-19-58_/checkpoints/universe/exper/last.ckpt
+
+# ckpt_path: .exp/orig_bucket_cluster/2025-04-25_15-19-58_/checkpoints/universe/exper/last.ckpt # 27 Apr
 
 
 train: true
