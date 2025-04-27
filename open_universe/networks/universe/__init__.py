@@ -185,6 +185,14 @@ from .score import ScoreNetwork
 
 
 
+# # 27 Apr version = 512 dim for FILM and Cross-Atten
+from .condition_18Apr_512 import ConditionerNetwork 
+from .m_universe_gan_NS2_adj2 import UniverseGAN
+from .textencoder_plbert_op_fix import TextEncoder
+from .score import ScoreNetwork
+
+
+
 # # # Trying WavLM
 # # from .condition_NS_plbert_adj import ConditionerNetwork 
 # from .condition_wv import ConditionerNetwork 
