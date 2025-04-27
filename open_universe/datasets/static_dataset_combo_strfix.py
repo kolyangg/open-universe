@@ -77,7 +77,9 @@ class NoisyDataset(torch.utils.data.Dataset):
 
     def _load(self, p: Path) -> torch.Tensor:
         # wav, sr = torchaudio.load(p)
-        wav, sr = torchaudio.load(str(p))
+        # wav, sr = torchaudio.load(str(p))
+        wav, sr = torchaudio.load(p, backend="soundfile")
+        
         if sr != self.fs:
             wav = torchaudio.functional.resample(wav, sr, self.fs)
         return wav
