@@ -6,13 +6,13 @@ _target_: open_universe.dataset_aligned.DataModule      # updated path
 train_sample_folder: data/debug_batch_dumps/train     # "" ⇒ disable
 train_sample_batches: 3
 val_sample_folder:   data/debug_batch_dumps/val
-val_sample_batches: 770
+val_sample_batches:  3
 # ------------------------------------------------------------------ #
 
 
 train:
   dataset: vb-train-cut
-  dl_opts: {batch_size: 15, num_workers: 12, shuffle: true,  pin_memory: true} # 8 for local, 15 for cluster
+  dl_opts: {batch_size: 4, num_workers: 12, shuffle: true,  pin_memory: true} # 8 for 2 sec, 4 for 4 sec
 
 val:
   dataset: vb-val-cut
@@ -31,16 +31,16 @@ datasets:
     split: train
     fs: 16000
     # word-cut hyper-params
-    win_len_sec:         2.0
+    win_len_sec:         4.0
     min_cut_sec:         0.2
-    max_cut_sec:         2.0
+    max_cut_sec:         4.0
     num_samples_audio:   1
     p_random:            1.0
     big_cut_min:         0.75
     starting_noise_min:  0.0
     starting_noise_max:  0.2
-    spacing_min:         0.1
-    spacing_max:         0.2
+    spacing_min:         0.25
+    spacing_max:         0.5
     part_used:           1.0
 
   vb-val-cut:
