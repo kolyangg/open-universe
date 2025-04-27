@@ -127,8 +127,8 @@ class DataModule(pl.LightningDataModule):
                 sr = 16_000
                 for i in range(noisy.shape[0]):
                     uid = f"b{dump['cnt']:02d}_{i:02d}"
-                    torchaudio.save(dump["dir"] / "noisy" / f"{uid}.wav", noisy[i].cpu(), sr)
-                    torchaudio.save(dump["dir"] / "clean" / f"{uid}.wav", clean[i].cpu(), sr)
+                    torchaudio.save(dump["dir"] / "noisy" / f"{uid}.wav", noisy[i].cpu(), sr, backend="soundfile")
+                    torchaudio.save(dump["dir"] / "clean" / f"{uid}.wav", clean[i].cpu(), sr, backend="soundfile")
                     (dump["dir"] / "txt" / f"{uid}.txt").write_text(txt[i])
                 dump["cnt"] += 1
             return noisy, clean, list(txt), mask
