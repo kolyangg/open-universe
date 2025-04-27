@@ -19,7 +19,13 @@ Contains the necessary API to load and process data during training.
 Author: Robin Scheibler (@fakufaku)
 """
 
-# 22 Apr: Aligned versions
+# # 22 Apr: Aligned versions
 
-from .datamodule_aligned import DataModule
+# from .datamodule_aligned import DataModule
+# from .static_dataset_aligned import NoisyDataset
+
+
+# 27 Apr: Aligned versions
+
+from .datamodule_aligned_fix import DataModule
 from .static_dataset_aligned import NoisyDataset
