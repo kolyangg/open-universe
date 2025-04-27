@@ -48,12 +48,12 @@ Author: Robin Scheibler (@fakufaku)
 
 # 19 Apr: Combined version of all three options
 
-# from .datamodule_combo import DataModule
-# from .static_dataset_combo import NoisyDataset
+from .datamodule_combo import DataModule
+from .static_dataset_combo import NoisyDataset
 
 
 
 # 27 Apr: Combined version + strfix
 
-from .datamodule_combo import DataModule
-from .static_dataset_combo_strfix import NoisyDataset
+# from .datamodule_combo import DataModule
+# from .static_dataset_combo_strfix import NoisyDataset
