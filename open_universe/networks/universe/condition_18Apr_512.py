@@ -411,7 +411,8 @@ class TextConditioner(torch.nn.Module):
 
         # Cross-attention
         self.mel_to_attn = torch.nn.Linear(total_channels, cross_attention_dim)
-        self.cross_attention = CrossAttentionBlock(cross_attention_dim, num_heads=4)
+        # self.cross_attention = CrossAttentionBlock(cross_attention_dim, num_heads=4)
+        self.cross_attention = CrossAttentionBlock(cross_attention_dim, num_heads=cross_attention_dim // 64) # 512 → 8 heads
         self.attn_to_mel = torch.nn.Linear(cross_attention_dim, total_channels)
 
         # init
@@ -464,9 +465,9 @@ class TextConditioner(torch.nn.Module):
         
         #### UPDATED in 512 VER ####
         if self.total_channels != self.cross_attention_dim:
-            x_mel_attn = self.mel_to_attn(x_mel_t)   # => [B, T_mel, cross_attention_dim]
+            x_mel_t = self.attn_to_mel(x_mel_attn)   # => [B, T_mel, 512]
         else:
-            x_mel_attn = x_mel_t
+            x_mel_t = x_mel_attn
         #### UPDATED in 512 VER ####
 
         # 4) L2 norm
