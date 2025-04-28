@@ -177,19 +177,19 @@ from .mdn import MixtureDensityNetworkLoss
 # from .score import ScoreNetwork
 
 
-# # 19 Apr version = 18 Apr + adding text masking
-from .condition_18Apr import ConditionerNetwork 
-from .m_universe_gan_NS2_adj2 import UniverseGAN
-from .textencoder_plbert_op_fix import TextEncoder
-from .score import ScoreNetwork
-
-
-
-# # # 27 Apr version = 512 dim for FILM and Cross-Atten
-# from .condition_18Apr_512 import ConditionerNetwork 
+# # # 19 Apr version = 18 Apr + adding text masking
+# from .condition_18Apr import ConditionerNetwork 
 # from .m_universe_gan_NS2_adj2 import UniverseGAN
 # from .textencoder_plbert_op_fix import TextEncoder
 # from .score import ScoreNetwork
+
+
+
+# # 27 Apr version = 512 dim for FILM and Cross-Atten
+from .condition_18Apr_512 import ConditionerNetwork 
+from .m_universe_gan_NS2_adj2 import UniverseGAN
+from .textencoder_plbert_op_fix import TextEncoder
+from .score import ScoreNetwork
 
 
 
