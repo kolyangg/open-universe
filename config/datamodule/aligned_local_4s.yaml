@@ -4,7 +4,7 @@ _target_: open_universe.dataset_aligned.DataModule      # updated path
 # where to dump the very first few batches for inspection
 
 train_sample_folder: data/debug_batch_dumps/train     # "" ⇒ disable
-train_sample_batches: 3
+train_sample_batches: 200 # 3
 val_sample_folder:   data/debug_batch_dumps/val
 val_sample_batches:  3
 # ------------------------------------------------------------------ #
@@ -12,7 +12,7 @@ val_sample_batches:  3
 
 train:
   dataset: vb-train-cut
-  dl_opts: {batch_size: 4, num_workers: 12, shuffle: true,  pin_memory: true} # 8 for 2 sec, 4 for 4 sec
+  dl_opts: {batch_size: 1, num_workers: 12, shuffle: true,  pin_memory: true} # 8 for 2 sec, 4 for 4 sec
 
 val:
   dataset: vb-val-cut
@@ -39,8 +39,8 @@ datasets:
     big_cut_min:         0.75
     starting_noise_min:  0.0
     starting_noise_max:  0.2
-    spacing_min:         0.25
-    spacing_max:         0.5
+    spacing_min:         0.35
+    spacing_max:         0.7
     part_used:           1.0
 
   vb-val-cut:

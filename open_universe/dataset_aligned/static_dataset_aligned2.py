@@ -14,10 +14,14 @@ from pathlib import Path
 from typing import Optional, Tuple, Union
 import torch, torchaudio
 from hydra.utils import to_absolute_path
-import textgrid, random, math
+import textgrid, math
 
 
 log = logging.getLogger(__name__)
+
+import re                                       # NEW
+
+
 
 def reindex_blocks(blocks):
     out, cursor = [], 0
@@ -138,6 +142,20 @@ class NoisyDataset(torch.utils.data.Dataset):
 
     # ------------------------------------------------------------------ #
     def __len__(self): return len(self.file_list)
+    
+    # -----------------------------------------------------------
+    @staticmethod
+    def _norm_txt(txt: str) -> str:
+        """
+        lower-case, remove punctuation, collapse multiple spaces
+        examples:
+            "Name, Matter!) "  ->  "name matter"
+        """
+        txt = txt.lower()
+        txt = re.sub(r"[^a-z0-9 ]", " ", txt)       # keep letters/digits/space
+        txt = re.sub(r"\s+", " ", txt)              # collapse 2+ spaces
+        return txt.strip()
+
 
     def _load(self, p: Path) -> torch.Tensor:
         # wav, sr = torchaudio.load(p)
@@ -158,13 +176,16 @@ class NoisyDataset(torch.utils.data.Dataset):
         # ---------- simple, no-augmentation path for val/test -------------
         if self.split != "train":
             txt = ""
+            # if self.text_path and (self.text_path / f"{Path(fn).stem}.txt").exists():
+            #     txt = (self.text_path / f"{Path(fn).stem}.txt").read_text().strip().lower()
             if self.text_path and (self.text_path / f"{Path(fn).stem}.txt").exists():
-                txt = (self.text_path / f"{Path(fn).stem}.txt").read_text().strip().lower()
+                txt = self._norm_txt( (self.text_path / f"{Path(fn).stem}.txt").read_text() )   # ▼
+
 
             mask = torch.ones(noisy.shape[-1])           # everything is valid
             return noisy, clean, txt, mask
 
-        
+
 
         # -------- variables always needed in training ---------------------
         # make sure they exist even when there is no TextGrid folder
@@ -211,7 +232,6 @@ class NoisyDataset(torch.utils.data.Dataset):
         chosen_src=[]; blocks=[]; mask=torch.ones(tgt_N)
 
 
-            
         # --- window assembly (mirrors make_debug_set) -----------------
         remaining = tgt_N
         cursor    = 0
@@ -238,7 +258,6 @@ class NoisyDataset(torch.utils.data.Dataset):
             remaining -= take
 
 
-
         
         # -------- first (large) cut -------------------------------------------
         big_thr = self.big_cut_min * tgt_N
@@ -256,6 +275,7 @@ class NoisyDataset(torch.utils.data.Dataset):
         else:
             first = None          # no speech block fits → clip will be filled with noise
 
+ 
         
         # -------- extra cuts with spacing --------------------------------------
         space_N = int(rng.uniform(self.spacing_min, self.spacing_max) * fs)
@@ -316,8 +336,9 @@ class NoisyDataset(torch.utils.data.Dataset):
         wav_c=torch.cat([clean[:,s:e] for s,e,_ in chosen_src],-1)
         wav_n=torch.cat([noisy[:,s:e] for s,e,_ in chosen_src],-1)
 
-        txt=" ".join(w for *_,w in reindex_blocks(blocks) if w).lower().strip()
-        
+        # txt=" ".join(w for *_,w in reindex_blocks(blocks) if w).lower().strip()
+        raw = " ".join(w for *_, w in reindex_blocks(blocks) if w)
+        txt = self._norm_txt(raw)   
         
         # make absolutely sure all returned tensors share the same length
         if wav_n.shape[-1] < tgt_N:

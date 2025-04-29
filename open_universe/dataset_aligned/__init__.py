@@ -28,4 +28,4 @@ Author: Robin Scheibler (@fakufaku)
 # 27 Apr: Aligned versions
 
 from .datamodule_aligned_fix import DataModule
-from .static_dataset_aligned import NoisyDataset
+from .static_dataset_aligned2 import NoisyDataset

@@ -165,6 +165,19 @@ class NoisyDataset(torch.utils.data.Dataset):
             return noisy, clean, txt, mask
 
         
+        # # ------- word-aligned window ---------------------------------
+        # iv      = self.ivs[idx]
+        
+        # if not iv and self.split == "train":
+        #     # fall back to plain random 2 s crop instead of “speech-free” clip
+        #     total = noisy.shape[-1]
+        #     if total <= self.win_N:
+        #         start = 0
+        #     else:
+        #         start = random.randint(0, total - self.win_N)
+        #     end = start + self.win_N
+        #     mask = torch.ones(self.win_N)
+        #     return noisy[:, start:end], clean[:, start:end], "", mask
 
         # -------- variables always needed in training ---------------------
         # make sure they exist even when there is no TextGrid folder
@@ -210,7 +223,14 @@ class NoisyDataset(torch.utils.data.Dataset):
         remaining=tgt_N; cursor=0
         chosen_src=[]; blocks=[]; mask=torch.ones(tgt_N)
 
-
+        # optional starting noise
+        # start_N=int(rng.uniform(self.starting_noise_min,self.starting_noise_max)*fs)
+        # if start_N and remaining>=start_N:
+        #     nb=rng.choice(noise_blocks)
+        #     st=rng.randint(nb[0],nb[1]-start_N)
+        #     chosen_src.append((st,st+start_N,""))
+        #     blocks.append((cursor,cursor+start_N,""))
+        #     cursor+=start_N; remaining-=start_N
             
         # --- window assembly (mirrors make_debug_set) -----------------
         remaining = tgt_N
@@ -238,7 +258,15 @@ class NoisyDataset(torch.utils.data.Dataset):
             remaining -= take
 
 
-
+        # first (large) cut
+        # big_thr=self.big_cut_min*tgt_N
+        # fit=[c for c in spans if c[1]-c[0]<=remaining]
+        # big=[c for c in fit if c[1]-c[0]>=big_thr]
+        # first=rng.choice(big) if big else max(fit,key=lambda x:x[1]-x[0])
+        # chosen_src.append(first)
+        # blocks.append((cursor,cursor+first[1]-first[0],first[2]))
+        # cursor+=first[1]-first[0]; remaining-=first[1]-first[0]
+        
         
         # -------- first (large) cut -------------------------------------------
         big_thr = self.big_cut_min * tgt_N
@@ -256,6 +284,23 @@ class NoisyDataset(torch.utils.data.Dataset):
         else:
             first = None          # no speech block fits → clip will be filled with noise
 
+        # extra cuts with spacing
+        # space_N=int(rng.uniform(self.spacing_min,self.spacing_max)*fs)
+        # pool=[c for c in spans if c is not first]
+        # rng.shuffle(pool) if rng.random()<self.p_random else pool.sort(key=lambda x:x[1]-x[0],reverse=True)
+        # for s,e,w in pool:
+        #     need=e-s+(space_N if space_N else 0)
+        #     if need>remaining or remaining<min_N: continue
+        #     if space_N and noise_blocks:
+        #         nb=rng.choice(noise_blocks)
+        #         st=rng.randint(nb[0],nb[1]-space_N)
+        #         chosen_src.append((st,st+space_N,""))
+        #         blocks.append((cursor,cursor+space_N,""))
+        #         cursor+=space_N; remaining-=space_N
+        #     chosen_src.append((s,e,w))
+        #     blocks.append((cursor,cursor+e-s,w))
+        #     cursor+=e-s; remaining-=e-s
+        
         
         # -------- extra cuts with spacing --------------------------------------
         space_N = int(rng.uniform(self.spacing_min, self.spacing_max) * fs)
