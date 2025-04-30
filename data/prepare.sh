@@ -10,8 +10,17 @@ set -o pipefail
 ################################################################################
 # Check & activate Conda environment 'universe' (new)
 ################################################################################
-if command -v conda &>/dev/null; then
-    if conda env list | awk '{print $1}' | grep -q '^universe$'; then
+# if command -v conda &>/dev/null; then
+#     if conda env list | awk '{print $1}' | grep -q '^universe$'; then
+
+# Activate with whichever tool is available
+if command -v mamba &>/dev/null && mamba env list | awk '{print $1}' | grep -q '^universe$'; then
+    set +u
+    eval "$(mamba shell hook -s bash)"
+    mamba activate universe
+    set -u
+elif command -v conda &>/dev/null && conda env list | awk '{print $1}' | grep -q '^universe$'; then
+   
         set +u
         # shellcheck disable=SC1091
         source "$(conda info --base)/etc/profile.d/conda.sh"
@@ -22,7 +31,8 @@ if command -v conda &>/dev/null; then
         exit 1
     fi
 else
-    echo "'conda' command not found. Install Miniconda/Anaconda first."
+    # echo "'conda' command not found. Install Miniconda/Anaconda first."
+    echo "Neither mamba nor conda with 'universe' env found."
     exit 1
 fi
 

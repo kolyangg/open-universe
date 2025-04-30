@@ -58,7 +58,12 @@ models/universe/data/download.sh &
 DOWNLOAD_PID=$!
 
 # 2. Conda env: create / reuse depending on user choice
-if conda env list | awk '{print $1}' | grep -q '^universe$'; then
+# if conda env list | awk '{print $1}' | grep -q '^universe$'; then
+
+# 2. Env: create / reuse depending on user choice
+ENV_CMD=$([[ $USE_MAMBA -eq 1 ]] && echo mamba || echo conda)
+if $ENV_CMD env list | awk '{print $1}' | grep -q '^universe$'; then
+
   read -rp "Conda env 'universe' already exists. Re-install? [y/N]: " REPLY
   [[ "$REPLY" =~ ^[Yy]$ ]] && RUN_SETUP=1 || RUN_SETUP=0
 else
@@ -68,11 +73,17 @@ fi
 if [[ $RUN_SETUP -eq 1 ]]; then
   env_s=$(date +%s%N)
   echo "Setting up environment..."
-  if [[ $USE_MAMBA -eq 1 ]]; then
-    models/universe/setup_simple.sh --mamba
-  else
-    models/universe/setup_simple.sh
-  fi
+  # if [[ $USE_MAMBA -eq 1 ]]; then
+  #   models/universe/setup_simple.sh --mamba
+  # else
+  #   models/universe/setup_simple.sh
+  # fi
+
+  [[ $USE_MAMBA -eq 1 ]] \
+      && models/universe/setup_simple.sh --mamba \
+      || models/universe/setup_simple.sh
+
+
 else
   echo "Using existing 'universe' environment."
 fi
@@ -89,13 +100,27 @@ echo "Data download finished."
 # 3. Activate env and log in to WandB (if key provided)
 # ────────────────────────────────────────────────────────────────
 
-if command -v conda &>/dev/null; then
-    if conda env list | awk '{print $1}' | grep -q '^universe$'; then
+# if command -v conda &>/dev/null; then
+#     if conda env list | awk '{print $1}' | grep -q '^universe$'; then
+#         set +u
+#         # shellcheck disable=SC1091
+#         source "$(conda info --base)/etc/profile.d/conda.sh"
+#         conda activate universe
+#         set -u
+
+if command -v "$ENV_CMD" &>/dev/null; then
+    if $ENV_CMD env list | awk '{print $1}' | grep -q '^universe$'; then
         set +u
-        # shellcheck disable=SC1091
-        source "$(conda info --base)/etc/profile.d/conda.sh"
-        conda activate universe
+        if [[ $USE_MAMBA -eq 1 ]]; then
+            eval "$(mamba shell hook -s bash)"
+            mamba activate universe
+        else
+            source "$(conda info --base)/etc/profile.d/conda.sh"
+            conda activate universe
+        fi
         set -u
+
+
     else
         echo "Conda environment 'universe' not found. Please create it and rerun."
         exit 1
@@ -139,7 +164,8 @@ echo -e "\n----- Timing summary (seconds) -----"
 printf "Repo clone:           %6s\n"   "$(_sec $clone_s $clone_e)"
 printf "Data download:        %6s\n"   "$(_sec $dl_s    $dl_e)"
 printf "Env setup (%s): %6s\n" \
-        "$([[ $USE_MAMBA -eq 1 ]] && echo mamba || echo conda)" \
+        # "$([[ $USE_MAMBA -eq 1 ]] && echo mamba || echo conda)" \
+        "Env setup ($ENV_CMD): %6s\n"   "$(_sec $env_s $env_e)"  \
         "$(_sec $env_s   $env_e)"
 printf "Data prepare:         %6s\n"   "$(_sec $prep_s  $prep_e)"
 if [[ $GEN_TG =~ ^[Yy]$ ]]; then
