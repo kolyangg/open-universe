@@ -36,6 +36,15 @@ pip install torch==2.5.1 torchvision torchaudio==2.5.1 --no-cache-dir
 sudo apt update
 sudo apt install -y nvidia-cuda-toolkit
 
+
+# ---------------------------------------------------------------
+# mamba run: be sure a C/C++ tool-chain is present for packages
+# that need compilation (e.g. pesq, cython-based libs)
+# ---------------------------------------------------------------
+if [[ "$PKG" == "mamba" ]]; then
+  sudo apt install -y build-essential        # gcc g++ make …
+fi
+
 $PKG install -y -c conda-forge gmpy2 numexpr
 $PKG install -y nvidia::cuda-nvcc # for NVCC v12
 
