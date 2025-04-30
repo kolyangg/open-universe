@@ -37,17 +37,15 @@ echo
 # ---------------------------------------------------------------------------
 # Clone Miipher only if the folder is not there yet
 # ---------------------------------------------------------------------------
+clone_s=$(date +%s%N)
 if [ ! -d "_miipher" ]; then
-    clone_s=$(date +%s%N)
-    if [ ! -d "_miipher" ]; then
-
-    echo "Downloading _miipher repo"
-    mkdir _miipher
-    cd _miipher
-    git clone https://github.com/ajaybati/miipher2.0.git
-    cd ..
+  echo "Downloading _miipher repo"
+  mkdir _miipher
+  cd _miipher
+  git clone https://github.com/ajaybati/miipher2.0.git
+  cd ..
 else
-    echo "_miipher folder already exists – skipping download"
+  echo "_miipher folder already exists – skipping download"
 fi
 clone_e=$(date +%s%N)
 
