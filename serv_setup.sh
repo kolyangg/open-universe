@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 
 # call this script
@@ -7,19 +7,35 @@
 # Exit on error
 set -e
 
+
+# ────────────────────────────────────────────────────────────────
+# CLI flags
+#   --mamba             → build/activate env with mamba
+#   --script <cmd …>    → run arbitrary command after setup
+# ────────────────────────────────────────────────────────────────
+USE_MAMBA=0
+SCRIPT_CMD=()            # array preserves quoted args
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -m|--mamba)  USE_MAMBA=1; shift ;;
+    --script)    shift; SCRIPT_CMD=("$@"); break ;;  # everything that follows
+    *)           echo "Unknown flag $1"; exit 1 ;;
+  esac
+done
+
 # record overall start
 _t0=$(date +%s%N)           # nanoseconds since epoch
 
 # helper → duration in seconds to 2 d.p.
 _sec() { awk "BEGIN{printf \"%.2f\", ($2-$1)/1000000000}"; }
 
-# ────────────────────────────────────────────────────────────────
-# CLI:  -m / --mamba   ⇒ use mamba inside setup_simple.sh
-# ────────────────────────────────────────────────────────────────
-USE_MAMBA=0
-for arg in "$@"; do
-  [[ $arg == "-m" || $arg == "--mamba" ]] && USE_MAMBA=1
-done
+# # ────────────────────────────────────────────────────────────────
+# # CLI:  -m / --mamba   ⇒ use mamba inside setup_simple.sh
+# # ────────────────────────────────────────────────────────────────
+# USE_MAMBA=0
+# for arg in "$@"; do
+#   [[ $arg == "-m" || $arg == "--mamba" ]] && USE_MAMBA=1
+# done
 
 # ────────────────────────────────────────────────────────────────
 # Ask once whether to generate MFA TextGrids later
@@ -122,7 +138,7 @@ if command -v "$ENV_CMD" &>/dev/null; then
 
 
     else
-        echo "Conda environment 'universe' not found. Please create it and rerun."
+        echo "'universe' env not found under $ENV_CMD. Please create it and rerun."
         exit 1
     fi
 else
@@ -172,3 +188,12 @@ _t1=$(date +%s%N)
 printf "TOTAL:                %6s\n" "$(_sec $_t0 $_t1)"
 
 echo "Ready to go"
+
+
+# ────────────────────────────────────────────────────────────────
+# Optional follow-up command (e.g. start training)
+# ────────────────────────────────────────────────────────────────
+if ((${#SCRIPT_CMD[@]})); then
+  echo -e "\nRunning post-setup command:\n ${SCRIPT_CMD[*]}"
+  "${SCRIPT_CMD[@]}"
+fi
