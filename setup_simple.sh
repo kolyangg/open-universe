@@ -15,6 +15,16 @@ cd ~/speech_enh
 
 echo "Create universe env"
 source activate base           # still fine; mamba shares base
+
+# ---------------------------------------------------------------
+# If user requested mamba and it is absent, install it once
+# ---------------------------------------------------------------
+if [[ "$PKG" == "mamba" && ! $(command -v mamba) ]]; then
+  echo "mamba not found – installing into base environment ..."
+ conda install -n base -c conda-forge mamba -y
+fi
+
+
 $PKG create -n universe python=3.11.11 -y
 conda activate universe        # activation uses the usual conda hook
 
