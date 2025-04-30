@@ -359,7 +359,7 @@ class CrossAttentionBlock(torch.nn.Module):
 
 
 class FiLM(torch.nn.Module):
-    def __init__(self, condition_dim, feature_channels, init_scale=0.1):
+    def __init__(self, condition_dim, feature_channels, init_scale=0.05): # 0.1 before # NEW 30 APR
         super().__init__()
         self.gamma_fc = torch.nn.Linear(condition_dim, feature_channels)
         self.beta_fc = torch.nn.Linear(condition_dim, feature_channels)
@@ -374,10 +374,16 @@ class FiLM(torch.nn.Module):
         print(f"[DEBUG] FiLM beta stats:  min={beta.min().item():.4f}, max={beta.max().item():.4f}")
 
         
-        ### NEW 20 APR - clamp FILM gamma / beta
-        gamma = gamma.clamp(-10.0, 10.0)   
-        beta  = beta .clamp(-10.0, 10.0)
-        ### NEW 20 APR - clamp FILM gamma / beta
+        ### NEW 30 APR - clamp FILM gamma / beta
+        
+        # gamma = gamma.clamp(-10.0, 10.0)   
+        # beta  = beta .clamp(-10.0, 10.0)
+        
+        gamma = 300 * torch.tanh(gamma / 300)
+        beta  = 300 * torch.tanh(beta  / 300)
+
+        
+        ### NEW 30 APR - clamp FILM gamma / beta
 
         
         result = self.scale * (gamma * x + beta)

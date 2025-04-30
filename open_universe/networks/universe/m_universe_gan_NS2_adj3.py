@@ -165,10 +165,20 @@ class UniverseGAN(Universe):
         we do the "new" text logic. Otherwise we do old code's baseline flow.
         """
         opt_score, opt_disc = self.optimizers()
-        try:
-            sch_score, sch_disc = self.lr_schedulers()
+        # try:
+        #     sch_score, sch_disc = self.lr_schedulers()
+        #     has_schedulers = True
+        # except TypeError:
+        #     has_schedulers = False
+            
+        
+        try:                                    # lightning may now return 2 or 3 schedulers
+            schedulers   = self.lr_schedulers()     # list-like
+            sch_score    = schedulers[0]            # keep original names
+            sch_disc     = schedulers[1]
             has_schedulers = True
-        except TypeError:
+        except TypeError:                       # no schedulers configured
+            schedulers     = []
             has_schedulers = False
 
         # Expected layouts now:
@@ -336,8 +346,10 @@ class UniverseGAN(Universe):
             )
             opt_disc.step()
             # step schedulers if needed
+            # if has_schedulers:
+            #     self.step_schedulers(sch_score, sch_disc)
             if has_schedulers:
-                self.step_schedulers(sch_score, sch_disc)
+                self.step_schedulers(*schedulers)
         else:
             grad_norm_mpd = 0.0
             grad_norm_mrd = 0.0
@@ -429,8 +441,10 @@ class UniverseGAN(Universe):
         if self.ema is not None:
             self.ema.update(self.model_parameters())
 
+        # if has_schedulers:
+        #     self.step_schedulers(sch_score, sch_disc)
         if has_schedulers:
-            self.step_schedulers(sch_score, sch_disc)
+                self.step_schedulers(*schedulers)
 
         # every few steps, we log stuff
         self.log(
@@ -485,7 +499,7 @@ class UniverseGAN(Universe):
         # Return a dict or just the final loss for logging
         return {"loss": loss_gen}
 
-    def step_schedulers(self, sch_score, sch_disc):
+    def step_schedulers(self, sch_score, sch_disc, *extra_scheds):
         # step the schedulers
         step_scheduler(
             sch_score,
@@ -505,6 +519,20 @@ class UniverseGAN(Universe):
             self.trainer.is_last_batch,
             loss_val=None,
         )
+        
+        # --- NEW: any additional schedulers (text, etc.) -------------
+        for sch in extra_scheds:
+            # use a simple “every step” policy unless you later expose
+            # dedicated interval / frequency in the config
+            step_scheduler(
+                sch,
+                interval="step",
+                frequency=1,
+                epoch=self.current_epoch,
+                step=self.global_step,
+                is_last_batch=self.trainer.is_last_batch,
+                loss_val=None,
+            )
 
     def configure_optimizers(self):
         # generator
@@ -557,10 +585,11 @@ class UniverseGAN(Universe):
             for name, p in submod.named_parameters():
                 if not p.requires_grad:
                     continue
-                if pick_excluded(name):
-                    excluded.append(p)
-                else:
-                    others.append(p)
+                (excluded if pick_excluded(name) else others).append(p)
+                # if pick_excluded(name):
+                #     excluded.append(p)
+                # else:
+                #     others.append(p)
 
         # # --- separate text-specific params and remove them from 'others/ excluded'
         # text_params = [p for name, p in self.condition_model.named_parameters()
@@ -591,7 +620,8 @@ class UniverseGAN(Universe):
                             if n.startswith("text_conditioner") and p.requires_grad]
         text_ids         = {id(p) for p in text_params}
         self.text_ids = text_ids     #  ← NEW
-
+        
+        # remove text params from the other two lists
         others   = [p for p in others   if id(p) not in text_ids]
         excluded = [p for p in excluded if id(p) not in text_ids]
 
@@ -630,7 +660,30 @@ class UniverseGAN(Universe):
             scheduler_disc = instantiate_scheduler(
                 self.schedule_kwargs.get("discriminator"), optimizer_disc
             )
-            return [optimizer_gen, optimizer_disc], [scheduler_gen, scheduler_disc]
+            
+            
+            # -- NEW: optional text warm-up scheduler -----------------------
+            sched_cfg_text = self.schedule_kwargs.get("text", None)
+            if sched_cfg_text is not None:
+                # create the object exactly like the others
+                scheduler_text = instantiate(
+                    {**OmegaConf.to_container(sched_cfg_text["scheduler"], resolve=True),
+                     "optimizer": optimizer_gen},
+                    _recursive_=False,
+                )
+                # restrict it to the third param-group (index 2) of optimizer_gen
+                scheduler_text = {
+                    "scheduler": scheduler_text,
+                    "interval":  sched_cfg_text.get("interval",  "step"),
+                    "frequency": sched_cfg_text.get("frequency", 1),
+                }
+                sched_list = [scheduler_gen, scheduler_disc, scheduler_text]
+            else:
+                sched_list = [scheduler_gen, scheduler_disc]
+
+            return [optimizer_gen, optimizer_disc], sched_list
+            
+           # return [optimizer_gen, optimizer_disc], [scheduler_gen, scheduler_disc]
         else:
             return [optimizer_gen, optimizer_disc]
 

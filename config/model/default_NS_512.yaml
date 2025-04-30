@@ -44,7 +44,7 @@ condition_model:
     # hidden_dim: 512
     # num_layers: 1
     hidden_dim: 512 # 512 # 256
-  text_lr_scale: 0.8 #  0.3  # new field (scale as % of main LR)
+  text_lr_scale: 1.2 # 0.8 #  0.3  # new field (scale as % of main LR)
 
 diffusion:
   schedule: geometric
@@ -91,7 +91,7 @@ optimizer:
   accumulate_grad_batches: 1
   generator:
     _target_: torch.optim.AdamW
-    lr: 0.00035 # 0.0004  # increased generator learning rate from 0.0002 for 512 hidden_dim in condition model
+    lr: 0.00022 # 0.00035 # 0.0004  # increased generator learning rate from 0.0002 for 512 hidden_dim in condition model
     weight_decay: 0.01
     betas: [0.8, 0.99]
     weight_decay_exclude: [prelu, bias]
@@ -122,6 +122,14 @@ scheduler:
       T_cosine: 400000
       eta_min: 1.6e-06
       T_max: ${trainer.max_steps}
+    interval: step
+    frequency: 1
+  text:                       # 5 k-step warm-up **only** on text ## NEW 30 APR
+    scheduler:
+      _target_: torch.optim.lr_scheduler.LinearLR
+      start_factor: 1e-6  
+      end_factor: 1.0
+      total_iters: 5000
     interval: step
     frequency: 1
 
