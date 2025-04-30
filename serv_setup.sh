@@ -7,17 +7,32 @@
 # Exit on error
 set -e
 
-echo "Downloading _miipher repo"
-mkdir _miipher
-cd _miipher
-git clone https://github.com/ajaybati/miipher2.0.git
-cd ..
+# ---------------------------------------------------------------------------
+# Clone Miipher only if the folder is not there yet
+# ---------------------------------------------------------------------------
+if [ ! -d "_miipher" ]; then
+    echo "Downloading _miipher repo"
+    mkdir _miipher
+    cd _miipher
+    git clone https://github.com/ajaybati/miipher2.0.git
+    cd ..
+else
+    echo "_miipher folder already exists – skipping download"
+fi
 
-echo "Downloading and unzipping data..."
-models/universe/data/download.sh
+# echo "Downloading and unzipping data..."
+# models/universe/data/download.sh
+
+echo "Downloading and unzipping data (running in background)..."
+models/universe/data/download.sh &
+DOWNLOAD_PID=$!
 
 echo "Setting up environment..."
 models/universe/setup_simple.sh
+
+echo "Waiting for data download to complete..."
+wait "$DOWNLOAD_PID"
+echo "Data download finished."
 
 conda activate universe
 
