@@ -8,6 +8,14 @@
 set -e
 
 # ────────────────────────────────────────────────────────────────
+# CLI:  -m / --mamba   ⇒ use mamba inside setup_simple.sh
+# ────────────────────────────────────────────────────────────────
+USE_MAMBA=0
+for arg in "$@"; do
+  [[ $arg == "-m" || $arg == "--mamba" ]] && USE_MAMBA=1
+done
+
+# ────────────────────────────────────────────────────────────────
 # Ask once whether to generate MFA TextGrids later
 # ────────────────────────────────────────────────────────────────
 read -rp "Generate MFA TextGrids after data prep? [y/N]: " GEN_TG
@@ -50,7 +58,11 @@ fi
 
 if [[ $RUN_SETUP -eq 1 ]]; then
   echo "Setting up environment..."
-  models/universe/setup_simple.sh
+  if [[ $USE_MAMBA -eq 1 ]]; then
+    models/universe/setup_simple.sh --mamba
+  else
+    models/universe/setup_simple.sh
+  fi
 else
   echo "Using existing 'universe' environment."
 fi
