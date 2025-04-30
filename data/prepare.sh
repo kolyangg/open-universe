@@ -26,10 +26,7 @@ elif command -v conda &>/dev/null && conda env list | awk '{print $1}' | grep -q
         source "$(conda info --base)/etc/profile.d/conda.sh"
         conda activate universe
         set -u
-    else
-        echo "Conda environment 'universe' not found. Please create it and rerun."
-        exit 1
-    fi
+
 else
     # echo "'conda' command not found. Install Miniconda/Anaconda first."
     echo "Neither mamba nor conda with 'universe' env found."
