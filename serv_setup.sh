@@ -161,17 +161,14 @@ fi
 # Timing summary
 # ────────────────────────────────────────────────────────────────
 echo -e "\n----- Timing summary (seconds) -----"
-printf "Repo clone:           %6s\n"   "$(_sec $clone_s $clone_e)"
-printf "Data download:        %6s\n"   "$(_sec $dl_s    $dl_e)"
-printf "Env setup (%s): %6s\n" \
-        # "$([[ $USE_MAMBA -eq 1 ]] && echo mamba || echo conda)" \
-        "Env setup ($ENV_CMD): %6s\n"   "$(_sec $env_s $env_e)"  \
-        "$(_sec $env_s   $env_e)"
-printf "Data prepare:         %6s\n"   "$(_sec $prep_s  $prep_e)"
+printf "Repo clone:           %6s\n" "$(_sec $clone_s $clone_e)"
+printf "Data download:        %6s\n" "$(_sec $dl_s $dl_e)"
+printf "Env setup (%s):       %6s\n" "$ENV_CMD" "$(_sec $env_s $env_e)"
+printf "Data prepare:         %6s\n" "$(_sec $prep_s $prep_e)"
 if [[ $GEN_TG =~ ^[Yy]$ ]]; then
-  printf "TextGrid prepare:     %6s\n"   "$(_sec $tg_s    $tg_e)"
+  printf "TextGrid prepare:     %6s\n" "$(_sec $tg_s $tg_e)"
 fi
 _t1=$(date +%s%N)
-printf "TOTAL:                %6s\n"   "$(_sec $_t0 $_t1)"
+printf "TOTAL:                %6s\n" "$(_sec $_t0 $_t1)"
 
 echo "Ready to go"
