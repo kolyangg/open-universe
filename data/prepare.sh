@@ -12,10 +12,11 @@ set -o pipefail
 ################################################################################
 if command -v conda &>/dev/null; then
     if conda env list | awk '{print $1}' | grep -q '^universe$'; then
-        echo "Activating Conda environment 'universe' ..."
+        set +u
         # shellcheck disable=SC1091
         source "$(conda info --base)/etc/profile.d/conda.sh"
         conda activate universe
+        set -u
     else
         echo "Conda environment 'universe' not found. Please create it and rerun."
         exit 1
@@ -24,6 +25,7 @@ else
     echo "'conda' command not found. Install Miniconda/Anaconda first."
     exit 1
 fi
+
 
 ################################################################################
 # Configuration
