@@ -12,7 +12,7 @@ val_sample_batches: 770
 
 train:
   dataset: vb-train-cut
-  dl_opts: {batch_size: 5, num_workers: 12, shuffle: true,  pin_memory: true} # 8 for local (16 GB), 15 for cluster (32 GB), 25 for vast (48 GB)
+  dl_opts: {batch_size: 8, num_workers: 12, shuffle: true,  pin_memory: true} # 8 for local (16 GB), 15 for cluster (32 GB), 25 for vast (48 GB)
 
 val:
   dataset: vb-val-cut

@@ -349,5 +349,14 @@ class NoisyDataset(torch.utils.data.Dataset):
 
                 
         
-        return wav_n, wav_c, txt, mask
+        # return wav_n, wav_c, txt, mask
+    
+    # ----------- NEW: lightweight per-sample meta ----------------
+        meta = {
+            "clean_fn": str(self.clean_path / fn) if self.clean_available else "",
+            "noisy_fn": str(self.noisy_path / fn),
+            "blocks":   [(int(s), int(e), w) for s, e, w in chosen_src],
+        }
+
+        return wav_n, wav_c, txt, mask, meta          #  ← extra field
 

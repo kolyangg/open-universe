@@ -44,6 +44,7 @@ condition_model:
     # hidden_dim: 512
     # num_layers: 1
     hidden_dim: 512 # 512 # 256
+  text_lr_scale: 0.3  # new field (scale as % of main LR)
 
 diffusion:
   schedule: geometric
