@@ -1,18 +1,11 @@
 #!/bin/bash
 
-# Exit on error
-set -e
-
-# echo "Downloading main repo"
-# git clone --recursive https://github.com/kolyangg/speech_enh.git
-# cd speech_enh
-# cd models/universe
-# git checkout main
-# cd ~/speech_enh
-
 
 # call this script
 # models/universe/serv_setup.sh
+
+# Exit on error
+set -e
 
 echo "Downloading _miipher repo"
 mkdir _miipher
@@ -20,13 +13,17 @@ cd _miipher
 git clone https://github.com/ajaybati/miipher2.0.git
 cd ..
 
+echo "Downloading and unzipping data..."
+models/universe/data/download.sh
+
 echo "Setting up environment..."
 models/universe/setup_simple.sh
 
 conda activate universe
 
-echo "Downloading data..."
-models/universe/data/prepare_voicebank_demand.sh
+echo "Preparing data..."
+models/universe/data/prepare.sh
+
 
 # set -euo pipefail
 
