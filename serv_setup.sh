@@ -7,6 +7,12 @@
 # Exit on error
 set -e
 
+# ────────────────────────────────────────────────────────────────
+# Ask once whether to generate MFA TextGrids later
+# ────────────────────────────────────────────────────────────────
+read -rp "Generate MFA TextGrids after data prep? [y/N]: " GEN_TG
+
+
 
 # ────────────────────────────────────────────────────────────────
 # 1. Ask for WandB key (blank = skip) – once at startup
@@ -89,40 +95,12 @@ models/universe/data/prepare.sh
 
 # set -euo pipefail
 
-echo "Preparing text alignment data with MFA - train" 
 
-WAV_DIR=data/voicebank_demand/16k/train/clean
-TXT_DIR=data/voicebank_demand/trainset_28spk_txt
-OUTPUT_DIR=data/voicebank_demand/textgrids/train
-
-
-if [ -d "$OUTPUT_DIR" ]; then
-  read -rp "TextGrids for TRAIN already exist. Re-generate? [y/N]: " R
-  [[ $R =~ ^[Yy]$ ]] && python models/universe/data/make_textgrids.py "$WAV_DIR" "$TXT_DIR" "$OUTPUT_DIR" \
-                     || echo "Skipping train TextGrids."
-else
-  python models/universe/data/make_textgrids.py "$WAV_DIR" "$TXT_DIR" "$OUTPUT_DIR"
-fi
-
-# python models/universe/data/make_textgrids.py \
-#   "$WAV_DIR" "$TXT_DIR" "$OUTPUT_DIR"
-
-
-echo "Preparing text alignment data with MFA - val" 
-
-WAV_DIR=data/voicebank_demand/16k/val/clean
-TXT_DIR=data/voicebank_demand/trainset_28spk_txt
-OUTPUT_DIR=data/voicebank_demand/textgrids/val
-
-# python models/universe/data/make_textgrids.py \
-#   "$WAV_DIR" "$TXT_DIR" "$OUTPUT_DIR"
-
-if [ -d "$OUTPUT_DIR" ]; then
-  read -rp "TextGrids for VAL already exist. Re-generate? [y/N]: " R
-  [[ $R =~ ^[Yy]$ ]] && python models/universe/data/make_textgrids.py "$WAV_DIR" "$TXT_DIR" "$OUTPUT_DIR" \
-                     || echo "Skipping val TextGrids."
-else
-  python models/universe/data/make_textgrids.py "$WAV_DIR" "$TXT_DIR" "$OUTPUT_DIR"
+# ────────────────────────────────────────────────────────────────
+# Run TextGrid maker only if the user opted in
+# ────────────────────────────────────────────────────────────────
+if [[ $GEN_TG =~ ^[Yy]$ ]]; then
+  models/universe/data/prepare_textgrids.sh
 fi
 
 
