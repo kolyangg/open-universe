@@ -24,14 +24,22 @@ if [[ "$PKG" == "mamba" && ! $(command -v mamba) ]]; then
     conda install -n base -c conda-forge mamba -y
 
 
-    # --- keep conda-libmamba-solver and libmambapy in sync ----------
-    # The “QueryFormat” error appears when the plugin is newer than
-    # the C++ library.  Update both to matching versions right now.
-    mamba install -n base -c conda-forge \
-            "conda-libmamba-solver>=24.5" "libmambapy>=1.5.6" -y
+    # # --- keep conda-libmamba-solver and libmambapy in sync ----------
+    # # The “QueryFormat” error appears when the plugin is newer than
+    # # the C++ library.  Update both to matching versions right now.
+    # mamba install -n base -c conda-forge \
+    #         "conda-libmamba-solver>=24.5" "libmambapy>=1.5.6" -y
 
-    # (optional but harmless) makes sure activate works in future shells
-    conda init bash
+    # # (optional but harmless) makes sure activate works in future shells
+    # conda init bash
+
+
+    # --- keep plugin + core lib matched (fixes QueryFormat error) ----
+    install -n base -c conda-forge \
+            "libmambapy>=1.5.6,<2" "conda-libmamba-solver>=24.5,<25" -y
+    
+    # re-enable the updated plugin for the running shell
+    conda init --install-source mamba bash
 
 
 fi
