@@ -7,6 +7,12 @@
 # Exit on error
 set -e
 
+# record overall start
+_t0=$(date +%s%N)           # nanoseconds since epoch
+
+# helper → duration in seconds to 2 d.p.
+_sec() { awk "BEGIN{printf \"%.2f\", ($2-$1)/1000000000}"; }
+
 # ────────────────────────────────────────────────────────────────
 # CLI:  -m / --mamba   ⇒ use mamba inside setup_simple.sh
 # ────────────────────────────────────────────────────────────────
@@ -32,6 +38,9 @@ echo
 # Clone Miipher only if the folder is not there yet
 # ---------------------------------------------------------------------------
 if [ ! -d "_miipher" ]; then
+    clone_s=$(date +%s%N)
+    if [ ! -d "_miipher" ]; then
+
     echo "Downloading _miipher repo"
     mkdir _miipher
     cd _miipher
@@ -40,11 +49,13 @@ if [ ! -d "_miipher" ]; then
 else
     echo "_miipher folder already exists – skipping download"
 fi
+clone_e=$(date +%s%N)
 
 # echo "Downloading and unzipping data..."
 # models/universe/data/download.sh
 
 echo "Downloading and unzipping data (running in background)..."
+dl_s=$(date +%s%N)
 models/universe/data/download.sh &
 DOWNLOAD_PID=$!
 
@@ -57,6 +68,7 @@ else
 fi
 
 if [[ $RUN_SETUP -eq 1 ]]; then
+  env_s=$(date +%s%N)
   echo "Setting up environment..."
   if [[ $USE_MAMBA -eq 1 ]]; then
     models/universe/setup_simple.sh --mamba
@@ -66,10 +78,12 @@ if [[ $RUN_SETUP -eq 1 ]]; then
 else
   echo "Using existing 'universe' environment."
 fi
+env_e=$(date +%s%N)
 
 
 echo "Waiting for data download to complete..."
 wait "$DOWNLOAD_PID"
+dl_e=$(date +%s%N)
 echo "Data download finished."
 
 
@@ -102,7 +116,9 @@ fi
 
 
 echo "Preparing data..."
+prep_s=$(date +%s%N)
 models/universe/data/prepare.sh
+prep_e=$(date +%s%N)
 
 
 # set -euo pipefail
@@ -112,8 +128,26 @@ models/universe/data/prepare.sh
 # Run TextGrid maker only if the user opted in
 # ────────────────────────────────────────────────────────────────
 if [[ $GEN_TG =~ ^[Yy]$ ]]; then
+  tg_s=$(date +%s%N)
   models/universe/data/prepare_textgrids.sh
+  tg_e=$(date +%s%N)
 fi
 
+
+# ────────────────────────────────────────────────────────────────
+# Timing summary
+# ────────────────────────────────────────────────────────────────
+echo -e "\n----- Timing summary (seconds) -----"
+printf "Repo clone:           %6s\n"   "$(_sec $clone_s $clone_e)"
+printf "Data download:        %6s\n"   "$(_sec $dl_s    $dl_e)"
+printf "Env setup (%s): %6s\n" \
+        "$([[ $USE_MAMBA -eq 1 ]] && echo mamba || echo conda)" \
+        "$(_sec $env_s   $env_e)"
+printf "Data prepare:         %6s\n"   "$(_sec $prep_s  $prep_e)"
+if [[ $GEN_TG =~ ^[Yy]$ ]]; then
+  printf "TextGrid prepare:     %6s\n"   "$(_sec $tg_s    $tg_e)"
+fi
+_t1=$(date +%s%N)
+printf "TOTAL:                %6s\n"   "$(_sec $_t0 $_t1)"
 
 echo "Ready to go"

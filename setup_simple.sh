@@ -20,8 +20,20 @@ source activate base           # still fine; mamba shares base
 # If user requested mamba and it is absent, install it once
 # ---------------------------------------------------------------
 if [[ "$PKG" == "mamba" && ! $(command -v mamba) ]]; then
-  echo "mamba not found – installing into base environment ..."
- conda install -n base -c conda-forge mamba -y
+    echo "mamba not found – installing into base environment ..."
+    conda install -n base -c conda-forge mamba -y
+
+
+    # --- keep conda-libmamba-solver and libmambapy in sync ----------
+    # The “QueryFormat” error appears when the plugin is newer than
+    # the C++ library.  Update both to matching versions right now.
+    mamba install -n base -c conda-forge \
+            "conda-libmamba-solver>=24.5" "libmambapy>=1.5.6" -y
+
+    # (optional but harmless) makes sure activate works in future shells
+    conda init bash
+
+
 fi
 
 
