@@ -284,7 +284,7 @@ class UniverseGAN(Universe):
                             self.log(f"text_checks2/top_attended_{i}", pos, batch_size=mix.shape[0], **self.log_kwargs)
             else:
                 cond, y_est, _ = result
-            print("[DEBUG] Text-based conditioning active in training_step.")
+            # print("[DEBUG] Text-based conditioning active in training_step.")
         else:
             # old code: just call condition_model with no text
             cond, y_est, _ = self.condition_model(mix, train=True, mask = mask) ### 01 MAY: added mask

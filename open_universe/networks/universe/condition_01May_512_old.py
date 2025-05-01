@@ -317,7 +317,21 @@ class CrossAttentionBlock(torch.nn.Module):
         text_metrics["attention_focus_per_head"] = head_focus_mean.tolist()
                 
         ### 01 MAY ADD
- 
+        # ------------------------------------------------------
+        # NEW: zero-out the contribution of padded **queries**
+        # ------------------------------------------------------
+        # if x_mask is not None:
+        #     attn_out = attn_out.masked_fill(x_mask.unsqueeze(-1), 0.0)
+        #     # ignore them in all debug statistics
+        #     valid_q   = (~x_mask).unsqueeze(-1)          # [B,Q,1]
+        #     max_attentions = (attn_weights.masked_fill(~valid_q, -1)
+        #                     .max(dim=-1)[0])           # -1 for pads
+        #     attn_focus_metric = max_attentions[max_attentions>=0].mean().item()
+        # else:
+        #     attn_focus_metric = attn_weights.max(dim=-1)[0].mean().item()
+        
+        # text_metrics["attention_focus"] = attn_focus_metric
+        
         
         # ----------------------------------------------------------------------
         # 2) keep the *old* aggregate metrics — just average heads first
@@ -351,7 +365,45 @@ class CrossAttentionBlock(torch.nn.Module):
         text_metrics["attention_max"] = attn_weights.max().item()
         text_metrics["attention_mean"] = attn_weights.mean().item()
         
-      
+        # New stats excluding padding
+        # if cond_mask is not None:
+        #     # Create a mask to identify valid positions (non-padding)
+        #     valid_positions = ~cond_mask.unsqueeze(1).expand_as(attn_weights)
+            
+        #     # Calculate statistics on only the valid tokens
+        #     valid_attentions = attn_weights.masked_select(valid_positions)
+            
+        #     if valid_attentions.numel() > 0:
+        #         valid_min = valid_attentions.min().item()
+        #         valid_max = valid_attentions.max().item()
+        #         valid_mean = valid_attentions.mean().item()
+                
+        #         # Calculate valid attention focus (max attention per query, only considering valid tokens)
+        #         # First create a version of attn_weights where padding positions are set to -inf
+        #         masked_attn_weights = attn_weights.clone()
+        #         for b in range(attn_weights.size(0)):
+        #             # Set padding positions to -inf for this batch item
+        #             if cond_mask[b].any():
+        #                 masked_attn_weights[b, :, cond_mask[b]] = float('-inf')
+                
+        #         # Now get max attention per query (excluding padding)
+        #         valid_max_attentions = masked_attn_weights.max(dim=-1)[0]
+        #         valid_attention_focus = valid_max_attentions.mean().item()
+                
+        #         print(f"[DEBUG] Attention focus (excl. padding): {valid_attention_focus:.4f}")
+        #         print(f"[DEBUG] Attention stats (excl. padding): "
+        #             f"min={valid_min:.4f}, max={valid_max:.4f}, mean={valid_mean:.4f}")
+                
+        #         text_metrics["valid_attention_focus"] = valid_attention_focus
+        #         text_metrics["valid_attention_min"] = valid_min
+        #         text_metrics["valid_attention_max"] = valid_max
+        #         text_metrics["valid_attention_mean"] = valid_mean
+                
+        #         # Calculate padding percentage
+        #         padding_ratio = (cond_mask.float().sum() / cond_mask.numel()).item()
+        #         print(f"[DEBUG] Text padding ratio: {padding_ratio:.2%}")
+        #         text_metrics["padding_ratio"] = padding_ratio
+        
         
         if cond_mask is not None:
             # broadcast to [B,H,Q,S] then reduce
@@ -368,6 +420,15 @@ class CrossAttentionBlock(torch.nn.Module):
                 text_metrics["padding_ratio"]         = (
                     cond_mask.float().sum() / cond_mask.numel()).item()
 
+
+        # if attn_weights.shape[0] > 0:
+        #     # topK for first sample
+        #     attn_sample = attn_weights[0]
+        #     top_k = min(5, attn_sample.shape[-1])
+        #     _, top_indices = torch.topk(attn_sample.mean(dim=0), top_k)
+        #     print(f"[DEBUG] Top {top_k} attended positions: {top_indices.tolist()}")
+        #     text_metrics["top_attended_positions"] = top_indices.tolist()
+            
         
         # top-K indices (unchanged – but use attn_weights_avg)
         if attn_weights_avg.size(0):
@@ -432,10 +493,7 @@ class FiLM(torch.nn.Module):
 # New TextConditioner class
 # ----------------------------------------------------------------------------
 class TextConditioner(torch.nn.Module):
-    # def __init__(self, text_encoder_config, film_global_dim, cross_attention_dim, total_channels):
-    def __init__(self, text_encoder_config, film_global_dim, cross_attention_dim, total_channels,
-        num_heads: int, attention_temperature: float):    
-    
+    def __init__(self, text_encoder_config, film_global_dim, cross_attention_dim, total_channels):
         super().__init__()
         # Instantiate user-provided text encoder (PL-BERT, etc.)
         self.text_encoder = instantiate(text_encoder_config, _recursive_=False)
@@ -455,9 +513,7 @@ class TextConditioner(torch.nn.Module):
         # Cross-attention
         self.mel_to_attn = torch.nn.Linear(total_channels, cross_attention_dim)
         # self.cross_attention = CrossAttentionBlock(cross_attention_dim, num_heads=4)
-        # self.cross_attention = CrossAttentionBlock(cross_attention_dim, num_heads=cross_attention_dim // 64) # 512 → 8 heads
-        self.cross_attention = CrossAttentionBlock(cross_attention_dim, num_heads=num_heads, temperature=attention_temperature)
-        
+        self.cross_attention = CrossAttentionBlock(cross_attention_dim, num_heads=cross_attention_dim // 64) # 512 → 8 heads
         self.attn_to_mel = torch.nn.Linear(cross_attention_dim, total_channels)
 
         # init
@@ -571,9 +627,7 @@ class ConditionerNetwork(torch.nn.Module):
         text_encoder_config=None,  # If None => skip text logic
         film_global_dim=512,       # dimension for global text embedding # 512 is better here       #### UPDATED in 512 VER ####
         cross_attention_dim=512,    # dimension for cross-attn # 512 is better here                  #### UPDATED in 512 VER ####
-        text_lr_scale=1.0,           # NEW 30 APR
-        cross_attention_num_heads=None,          # ← NEW
-        attention_temperature=0.6               # ← NEW
+        text_lr_scale=1.0, # NEW 30 APR
     ):
         super().__init__()
         self.input_conv = cond_weight_norm(
@@ -638,10 +692,7 @@ class ConditionerNetwork(torch.nn.Module):
                 text_encoder_config,
                 film_global_dim,
                 cross_attention_dim,
-                total_channels,
-                num_heads=cross_attention_num_heads
-                       or max(1, cross_attention_dim // 64),
-                attention_temperature=attention_temperature,
+                total_channels
             )
         else:
             self.text_conditioner = None
@@ -722,7 +773,20 @@ class ConditionerNetwork(torch.nn.Module):
         h, lengths = self.encoder(x, x_mel) # latent representation
         
         #### 01 May add
-    
+        # ----------------------------------------------------------
+        # NEW: build query-padding mask once, reuse everywhere
+        # ----------------------------------------------------------
+        # if mask is not None:
+        #     # mask is [B,T_wave]; down-sample so it matches T_latent
+        #     factor = mask.shape[-1] // h.shape[-1]          # e.g. 64000//160 = 400
+        #     if factor > 1:
+        #         q_pad_mask = torch.nn.functional.avg_pool1d(
+        #             mask.unsqueeze(1), factor, factor).squeeze(1) < 0.5   # bool
+        #     else:
+        #         q_pad_mask = mask < 0.5
+        # else:
+        #     q_pad_mask = None
+            
         
         if mask is not None:
             # --- robust down-sampling -----------------------------------------
