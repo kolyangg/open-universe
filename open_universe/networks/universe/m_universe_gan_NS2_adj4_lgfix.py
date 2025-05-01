@@ -223,11 +223,12 @@ class UniverseGAN(Universe):
             
             # Robust device count: take the **largest** value reported by any
             # Lightning version / strategy so the scale is never under-estimated.
-            world = max(
-                getattr(self.trainer, "num_devices", 1),
-                getattr(self.trainer, "world_size", 1),
-                len(getattr(self.trainer.strategy, "parallel_devices", [None]))
-            )
+            world = (torch.distributed.get_world_size()
+                if torch.distributed.is_available() and torch.distributed.is_initialized()
+                else max(getattr(self.trainer, "world_size", 1),
+                        getattr(self.trainer, "num_devices", 1),
+                        len(getattr(self.trainer.strategy, "parallel_devices", []))))
+
                         
             accum    = getattr(self.trainer, "accumulate_grad_batches", 1)
             adj_step = int(self.global_step * (world * accum) / self.gpus_comparison_base)
