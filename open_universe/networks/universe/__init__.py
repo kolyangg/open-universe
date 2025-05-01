@@ -177,11 +177,11 @@ from .mdn import MixtureDensityNetworkLoss
 # from .score import ScoreNetwork
 
 
-# # 19 Apr version = 18 Apr + adding text masking
-from .condition_18Apr import ConditionerNetwork 
-from .m_universe_gan_NS2_adj2 import UniverseGAN
-from .textencoder_plbert_op_fix import TextEncoder
-from .score import ScoreNetwork
+# # # 19 Apr version = 18 Apr + adding text masking
+# from .condition_18Apr import ConditionerNetwork 
+# from .m_universe_gan_NS2_adj2 import UniverseGAN
+# from .textencoder_plbert_op_fix import TextEncoder
+# from .score import ScoreNetwork
 
 
 
@@ -191,11 +191,11 @@ from .score import ScoreNetwork
 # from .textencoder_plbert_op_fix import TextEncoder
 # from .score import ScoreNetwork
 
-# # # # 30 Apr version = 27 Apr + separate LR for text
-# from .condition_30Apr_512 import ConditionerNetwork 
-# from .m_universe_gan_NS2_adj3 import UniverseGAN
-# from .textencoder_plbert_op_fix import TextEncoder
-# from .score import ScoreNetwork
+# # # 30 Apr version = 27 Apr + separate LR for text
+from .condition_30Apr_512 import ConditionerNetwork 
+from .m_universe_gan_NS2_adj3 import UniverseGAN
+from .textencoder_plbert_op_fix import TextEncoder
+from .score import ScoreNetwork
 
 
 
