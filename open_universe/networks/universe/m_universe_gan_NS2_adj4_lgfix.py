@@ -129,11 +129,11 @@ class UniverseGAN(Universe):
     # helper that converts Lightning’s step
     # into “sample-equivalent” step
     # ---------------------------------------
-    def _scaled_step(self) -> int:
-        world   = getattr(self.trainer, "num_devices", 1)
-        accum   = getattr(self.trainer, "accumulate_grad_batches", 1)
-        scale   = (world * accum) / self.gpus_comparison_base     # ❸
-        return int(self.global_step * scale)
+    # def _scaled_step(self) -> int:
+    #     world   = getattr(self.trainer, "num_devices", 1)
+    #     accum   = getattr(self.trainer, "accumulate_grad_batches", 1)
+    #     scale   = (world * accum) / self.gpus_comparison_base     # ❸
+    #     return int(self.global_step * scale)
     
     # ------------------------------------------------------------------
     # override LightningModule.log  (affects EVERY self.log(...) call)
@@ -143,23 +143,41 @@ class UniverseGAN(Universe):
         Drop-in replacement that still does everything Lightning expects
         **and** writes the same metric on a ‘sample-equivalent’ x-axis.
         """
-        # 1 ) normal Lightning handling
-        super().log(name, value, *args, **kwargs)
+        # # 1 ) normal Lightning handling
+        # super().log(name, value, *args, **kwargs)
+        
+        # 1) keep reductions / prog-bar but STOP Lightning from writing
+        super().log(name, value, *args, logger=False, **kwargs)
 
         # 2 ) optional corrected step for the experiment logger
         if self.logger is None or not kwargs.get("logger", True):
             return                           # nothing to add
 
-        world  = getattr(self.trainer, "num_devices", 1)
-        accum  = getattr(self.trainer, "accumulate_grad_batches", 1)
-        scale  = (world * accum) / self.gpus_comparison_base
-        adj_step = int(self.global_step * scale)
+        # world  = getattr(self.trainer, "num_devices", 1)
+        # Lightning 1.8 → 2.x: pick the first attribute that exists
+        world = (getattr(self.trainer, "world_size",
+                 getattr(self.trainer, "num_devices",
+                 len(getattr(self.trainer.strategy, "parallel_devices", [None])))))
+                
+        
+        # accum  = getattr(self.trainer, "accumulate_grad_batches", 1)
+        # scale  = (world * accum) / self.gpus_comparison_base
+        # adj_step = int(self.global_step * scale)
+        
+        
+        accum     = getattr(self.trainer, "accumulate_grad_batches", 1)
+        adj_step  = int(self.global_step * (world * accum) / self.gpus_comparison_base)
+
 
         # most built-in loggers expose .experiment.add_scalar
         # (TensorBoard, W&B, MLflow, …).  Fallback safely if missing.
         exp = getattr(self.logger, "experiment", None)
         if hasattr(exp, "add_scalar"):
-            exp.add_scalar(name,
+            # exp.add_scalar(name,
+            #                value.detach() if torch.is_tensor(value) else value,
+            #                adj_step)
+            if self.trainer.is_global_zero and hasattr(exp, "add_scalar"):
+                exp.add_scalar(name,
                            value.detach() if torch.is_tensor(value) else value,
                            adj_step)
     
