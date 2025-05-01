@@ -217,9 +217,18 @@ class UniverseGAN(Universe):
                  return
 
             # 3) compute adjusted step
-            world = (getattr(self.trainer, "world_size",
-                    getattr(self.trainer, "num_devices",
-                    len(getattr(self.trainer.strategy, "parallel_devices", [None])))))
+            # world = (getattr(self.trainer, "world_size",
+            #         getattr(self.trainer, "num_devices",
+            #         len(getattr(self.trainer.strategy, "parallel_devices", [None])))))
+            
+            # Robust device count: take the **largest** value reported by any
+            # Lightning version / strategy so the scale is never under-estimated.
+            world = max(
+                getattr(self.trainer, "num_devices", 1),
+                getattr(self.trainer, "world_size", 1),
+                len(getattr(self.trainer.strategy, "parallel_devices", [None]))
+            )
+                        
             accum    = getattr(self.trainer, "accumulate_grad_batches", 1)
             adj_step = int(self.global_step * (world * accum) / self.gpus_comparison_base)
             scalar   = value.detach().cpu().item() if torch.is_tensor(value) else value
