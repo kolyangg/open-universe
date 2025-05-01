@@ -719,16 +719,32 @@ class ConditionerNetwork(torch.nn.Module):
         # ----------------------------------------------------------
         # NEW: build query-padding mask once, reuse everywhere
         # ----------------------------------------------------------
+        # if mask is not None:
+        #     # mask is [B,T_wave]; down-sample so it matches T_latent
+        #     factor = mask.shape[-1] // h.shape[-1]          # e.g. 64000//160 = 400
+        #     if factor > 1:
+        #         q_pad_mask = torch.nn.functional.avg_pool1d(
+        #             mask.unsqueeze(1), factor, factor).squeeze(1) < 0.5   # bool
+        #     else:
+        #         q_pad_mask = mask < 0.5
+        # else:
+        #     q_pad_mask = None
+            
+        
         if mask is not None:
-            # mask is [B,T_wave]; down-sample so it matches T_latent
-            factor = mask.shape[-1] // h.shape[-1]          # e.g. 64000//160 = 400
-            if factor > 1:
-                q_pad_mask = torch.nn.functional.avg_pool1d(
-                    mask.unsqueeze(1), factor, factor).squeeze(1) < 0.5   # bool
-            else:
-                q_pad_mask = mask < 0.5
+            # --- robust down-sampling -----------------------------------------
+            L_in, L_lat = mask.shape[-1], h.shape[-1]
+            factor = math.ceil(L_in / L_lat)                 # ← use CEIL not //
+            q_pad_mask = (torch.nn.functional.avg_pool1d(
+                            mask.unsqueeze(1).float(),
+                            kernel_size=factor,
+                            stride=factor,
+                            ceil_mode=True)                # keep last partial window
+                        .squeeze(1) < 0.5)                 # bool: True = pad
+            q_pad_mask = q_pad_mask[..., :L_lat]             # trim any extra frame
         else:
-            q_pad_mask = None
+            q_pad_mask = None    
+            
         ##### 01 May add    
         
         ##### TextConditioner - right at end of ConditionerEncoder (right after it) #####
