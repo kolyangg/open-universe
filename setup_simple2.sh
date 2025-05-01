@@ -30,6 +30,7 @@ if [[ $PKG == mamba ]]; then
 else
   source "$(conda info --base)/etc/profile.d/conda.sh"
   conda activate base
+  conda config --add channels defaults    # ← silences the FutureWarning
 fi
 
 # ──────────────────────────────────────────────────────────────

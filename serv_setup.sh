@@ -159,7 +159,7 @@ fi
 
 echo "Preparing data..."
 prep_s=$(date +%s%N)
-models/universe/data/prepare.sh
+models/universe/data/prepare2.sh
 prep_e=$(date +%s%N)
 
 
