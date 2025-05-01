@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Exit on error
-set -e
+set -euo pipefail               # safer bash
 
 # ----------------------------------------------------------------
 # Optional flag  --mamba | -m   ⇒ use mamba instead of conda

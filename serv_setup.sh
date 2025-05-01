@@ -96,8 +96,8 @@ if [[ $RUN_SETUP -eq 1 ]]; then
   # fi
 
   [[ $USE_MAMBA -eq 1 ]] \
-      && models/universe/setup_simple.sh --mamba \
-      || models/universe/setup_simple.sh
+      && models/universe/setup_simple2.sh --mamba \
+      || models/universe/setup_simple2.sh
 
 
 else
