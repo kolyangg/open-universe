@@ -127,13 +127,16 @@ echo "Data download finished."
 if command -v "$ENV_CMD" &>/dev/null; then
     if $ENV_CMD env list | awk '{print $1}' | grep -q '^universe$'; then
         set +u
-        if [[ $USE_MAMBA -eq 1 ]]; then
-            eval "$(mamba shell hook -s bash)"
-            mamba activate universe
-        else
-            source "$(conda info --base)/etc/profile.d/conda.sh"
-            conda activate universe
-        fi
+        # if [[ $USE_MAMBA -eq 1 ]]; then
+        #     eval "$(mamba shell hook -s bash)"
+        #     mamba activate universe
+        # else
+        #     source "$(conda info --base)/etc/profile.d/conda.sh"
+        #     conda activate universe
+        # fi
+
+        source "$(conda info --base)/etc/profile.d/conda.sh"
+        conda activate universe
         set -u
 
 
