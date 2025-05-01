@@ -198,15 +198,23 @@ class UniverseGAN(Universe):
         on_step  = kwargs.get("on_step",  False)
         on_epoch = kwargs.get("on_epoch", False)
         user_logger_flag = kwargs.pop("logger", True)         # remember & strip
+        # honour Trainer.log_every_n_steps (defaults to 50)
+        trainer_should_log = getattr(self.trainer, "should_log", True)
 
         # ───────────────────────────── branch on kind of metric
         if on_step:        # ---- per-step metric  ➜  de-duplicate & rescale
             # 1) still let Lightning do reductions / progress bar…
             super().log(name, value, *args, logger=False, **kwargs)
 
+            # # 2) …but exit if we must not touch external logger
+            # if self.logger is None or not user_logger_flag or not self.trainer.is_global_zero:
+            #     return
+            
             # 2) …but exit if we must not touch external logger
-            if self.logger is None or not user_logger_flag or not self.trainer.is_global_zero:
-                return
+            if (self.logger is None or not user_logger_flag or
+                not trainer_should_log or                 # ← NEW  (50-step gate)
+                not self.trainer.is_global_zero):
+                 return
 
             # 3) compute adjusted step
             world = (getattr(self.trainer, "world_size",
@@ -216,11 +224,23 @@ class UniverseGAN(Universe):
             adj_step = int(self.global_step * (world * accum) / self.gpus_comparison_base)
             scalar   = value.detach().cpu().item() if torch.is_tensor(value) else value
 
+            # # 4) one write, covering all built-in loggers
+            # if hasattr(self.logger, "log_metrics"):                       # W&B, MLflow…
+            #     self.logger.log_metrics({name: scalar}, step=adj_step)
+            # elif hasattr(getattr(self.logger, "experiment", None), "add_scalar"):  # TB
+            #     self.logger.experiment.add_scalar(name, scalar, adj_step)
+                
+            
             # 4) one write, covering all built-in loggers
-            if hasattr(self.logger, "log_metrics"):                       # W&B, MLflow…
-                self.logger.log_metrics({name: scalar}, step=adj_step)
-            elif hasattr(getattr(self.logger, "experiment", None), "add_scalar"):  # TB
-                self.logger.experiment.add_scalar(name, scalar, adj_step)
+            if hasattr(self.logger, "log_metrics"):          # W&B, MLflow, CSV …
+                self.logger.log_metrics({name: scalar,
+                                         "epoch": self.current_epoch},   # ← NEW
+                                         step=adj_step)
+            elif hasattr(getattr(self.logger, "experiment", None),
+                         "add_scalar"):                       # TensorBoard
+                self.logger.experiment.add_scalar(name,  scalar, adj_step)
+                self.logger.experiment.add_scalar("epoch", self.current_epoch,
+                                                  adj_step)               # ← NEW
 
         else:            # ---- epoch-only metric  ➜  let Lightning do everything
             super().log(name, value, *args, logger=user_logger_flag, **kwargs)
