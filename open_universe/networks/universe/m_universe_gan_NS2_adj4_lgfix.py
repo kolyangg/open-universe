@@ -147,10 +147,14 @@ class UniverseGAN(Universe):
         # super().log(name, value, *args, **kwargs)
         
         # 1) keep reductions / prog-bar but STOP Lightning from writing
+        
+        # --- extract & neutralise the incoming “logger=...” flag -------------
+        user_logger_flag = kwargs.pop("logger", True)   # keep caller’s intent
         super().log(name, value, *args, logger=False, **kwargs)
 
         # 2 ) optional corrected step for the experiment logger
-        if self.logger is None or not kwargs.get("logger", True):
+        # if self.logger is None or not kwargs.get("logger", True):
+        if self.logger is None or not user_logger_flag:
             return                           # nothing to add
 
         # world  = getattr(self.trainer, "num_devices", 1)
