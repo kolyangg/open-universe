@@ -138,53 +138,89 @@ class UniverseGAN(Universe):
     # ------------------------------------------------------------------
     # override LightningModule.log  (affects EVERY self.log(...) call)
     # ------------------------------------------------------------------
-    def log(self, name, value, *args, **kwargs):
-        """
-        Drop-in replacement that still does everything Lightning expects
-        **and** writes the same metric on a ‘sample-equivalent’ x-axis.
-        """
-        # # 1 ) normal Lightning handling
-        # super().log(name, value, *args, **kwargs)
+    # def log(self, name, value, *args, **kwargs):
+    #     """
+    #     Drop-in replacement that still does everything Lightning expects
+    #     **and** writes the same metric on a ‘sample-equivalent’ x-axis.
+    #     """
+    #     # # 1 ) normal Lightning handling
+    #     # super().log(name, value, *args, **kwargs)
         
-        # 1) keep reductions / prog-bar but STOP Lightning from writing
+    #     # 1) keep reductions / prog-bar but STOP Lightning from writing
         
-        # --- extract & neutralise the incoming “logger=...” flag -------------
-        user_logger_flag = kwargs.pop("logger", True)   # keep caller’s intent
-        super().log(name, value, *args, logger=False, **kwargs)
+    #     # --- extract & neutralise the incoming “logger=...” flag -------------
+    #     user_logger_flag = kwargs.pop("logger", True)   # keep caller’s intent
+    #     super().log(name, value, *args, logger=False, **kwargs)
 
-        # 2 ) optional corrected step for the experiment logger
-        # if self.logger is None or not kwargs.get("logger", True):
-        if self.logger is None or not user_logger_flag:
-            return                           # nothing to add
+    #     # 2 ) optional corrected step for the experiment logger
+    #     # if self.logger is None or not kwargs.get("logger", True):
+    #     if self.logger is None or not user_logger_flag:
+    #         return                           # nothing to add
 
-        # world  = getattr(self.trainer, "num_devices", 1)
-        # Lightning 1.8 → 2.x: pick the first attribute that exists
-        world = (getattr(self.trainer, "world_size",
-                 getattr(self.trainer, "num_devices",
-                 len(getattr(self.trainer.strategy, "parallel_devices", [None])))))
+    #     # world  = getattr(self.trainer, "num_devices", 1)
+    #     # Lightning 1.8 → 2.x: pick the first attribute that exists
+    #     world = (getattr(self.trainer, "world_size",
+    #              getattr(self.trainer, "num_devices",
+    #              len(getattr(self.trainer.strategy, "parallel_devices", [None])))))
                 
         
-        # accum  = getattr(self.trainer, "accumulate_grad_batches", 1)
-        # scale  = (world * accum) / self.gpus_comparison_base
-        # adj_step = int(self.global_step * scale)
+    #     # accum  = getattr(self.trainer, "accumulate_grad_batches", 1)
+    #     # scale  = (world * accum) / self.gpus_comparison_base
+    #     # adj_step = int(self.global_step * scale)
         
         
-        accum     = getattr(self.trainer, "accumulate_grad_batches", 1)
-        adj_step  = int(self.global_step * (world * accum) / self.gpus_comparison_base)
+    #     accum     = getattr(self.trainer, "accumulate_grad_batches", 1)
+    #     adj_step  = int(self.global_step * (world * accum) / self.gpus_comparison_base)
 
 
-        # most built-in loggers expose .experiment.add_scalar
-        # (TensorBoard, W&B, MLflow, …).  Fallback safely if missing.
-        exp = getattr(self.logger, "experiment", None)
-        if hasattr(exp, "add_scalar"):
-            # exp.add_scalar(name,
-            #                value.detach() if torch.is_tensor(value) else value,
-            #                adj_step)
-            if self.trainer.is_global_zero and hasattr(exp, "add_scalar"):
-                exp.add_scalar(name,
-                           value.detach() if torch.is_tensor(value) else value,
-                           adj_step)
+    #     # most built-in loggers expose .experiment.add_scalar
+    #     # (TensorBoard, W&B, MLflow, …).  Fallback safely if missing.
+    #     exp = getattr(self.logger, "experiment", None)
+    #     if hasattr(exp, "add_scalar"):
+    #         # exp.add_scalar(name,
+    #         #                value.detach() if torch.is_tensor(value) else value,
+    #         #                adj_step)
+    #         if self.trainer.is_global_zero and hasattr(exp, "add_scalar"):
+    #             exp.add_scalar(name,
+    #                        value.detach() if torch.is_tensor(value) else value,
+    #                        adj_step)
     
+    
+    def log(self, name, value, *args, **kwargs):
+        """
+        Replacement for LightningModule.log that
+        1) keeps Lightning reductions / prog-bar,
+        2) suppresses the default scalar write,
+        3) re-logs the metric with a step scaled by (world × accum) /
+        gpus_comparison_base, on rank-0 only, for any supported logger.
+        """
+        # ─────────────────────────────────────────────────────────────────────
+        # 1) Let Lightning do its bookkeeping, but tell it not to touch loggers
+        user_logger_flag = kwargs.pop("logger", True)          # remember caller’s wish
+        super().log(name, value, *args, logger=False, **kwargs)
+        # ─────────────────────────────────────────────────────────────────────
+        # 2) Exit early if we should not hit the external logger
+        if self.logger is None or not user_logger_flag or not self.trainer.is_global_zero:
+            return
+        # ─────────────────────────────────────────────────────────────────────
+        # 3) Compute the adjusted step
+        world = (getattr(self.trainer, "world_size",
+                getattr(self.trainer, "num_devices",
+                len(getattr(self.trainer.strategy, "parallel_devices", [None])))))
+        accum = getattr(self.trainer, "accumulate_grad_batches", 1)
+        adj_step = int(self.global_step * (world * accum) / self.gpus_comparison_base)
+        # make sure we hand ordinary Python scalars to the backend
+        scalar_val = value.detach().cpu().item() if torch.is_tensor(value) else value
+        # ─────────────────────────────────────────────────────────────────────
+        # 4) Write once, through the appropriate API
+        #    • WandbLogger / MLFlowLogger / CSVLogger → .log_metrics(...)
+        #    • TensorBoardLogger                   →  .experiment.add_scalar(...)
+        if hasattr(self.logger, "log_metrics"):                      # W&B, MLflow, CSV…
+            self.logger.log_metrics({name: scalar_val}, step=adj_step)
+        elif hasattr(getattr(self.logger, "experiment", None), "add_scalar"):  # TB
+            self.logger.experiment.add_scalar(name, scalar_val, adj_step)
+
+        
     ##### NEW 01 MAY #####
     
     
