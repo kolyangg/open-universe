@@ -73,17 +73,26 @@ echo "universe env created and activated"
 echo "installing torch and pre-requirements"
 pip install torch==2.5.1 torchvision torchaudio==2.5.1 --no-cache-dir
 
-sudo apt update
-sudo apt install -y nvidia-cuda-toolkit
+# sudo apt update
+# sudo apt install -y nvidia-cuda-toolkit
 
 
-# ---------------------------------------------------------------
-# mamba run: be sure a C/C++ tool-chain is present for packages
-# that need compilation (e.g. pesq, cython-based libs)
-# ---------------------------------------------------------------
-if [[ "$PKG" == "mamba" ]]; then
-  sudo apt install -y build-essential        # gcc g++ make …
-fi
+# # ---------------------------------------------------------------
+# # mamba run: be sure a C/C++ tool-chain is present for packages
+# # that need compilation (e.g. pesq, cython-based libs)
+# # ---------------------------------------------------------------
+# if [[ "$PKG" == "mamba" ]]; then
+#   sudo apt install -y build-essential        # gcc g++ make …
+# fi
+
+
+# System driver is already there on most hosts; add only compiler /
+# runtime libraries that *don’t* ship NVML so they can’t clash.
+$PKG install -y -c nvidia cuda-nvcc cudatoolkit-dev
+# Defensive: strip any accidental NVML copies from the env
+find "$CONDA_PREFIX/lib" -name 'libnvidia-ml.so*' -delete || true
+
+
 
 $PKG install -y -c conda-forge gmpy2 numexpr
 $PKG install -y nvidia::cuda-nvcc # for NVCC v12
