@@ -6,7 +6,7 @@ defaults:
     - experiment: default
 
 seed: 46762398
-ckpt_path: null
+# ckpt_path: null
 
 
 # ckpt_path: checkpoints/universe/exper/last.ckpt
@@ -27,7 +27,7 @@ ckpt_path: null
 
 # ckpt_path: ./exp/orig_bucket_cluster/2025-04-25_15-19-58_/checkpoints/universe/exper/last.ckpt # 27 Apr
 
-# ckpt_path: .exp/bucket_cluster/2025-04-21_17-48-19_/checkpoints/universe # 28 Apr - continue text bucket cluster run from 21 Apr
+ckpt_path: ./exp/bucket_cluster/2025-04-21_17-48-19_/checkpoints/universe/exper/last.ckpt # 28 Apr - continue text bucket cluster run from 21 Apr
 
 
 train: true
