@@ -272,7 +272,7 @@ class ConditionerDecoder(torch.nn.Module):
 #  NEW TEXT MODULES: FiLM & CrossAttention
 # ----------------------------------------------------------------------
 class CrossAttentionBlock(torch.nn.Module):
-    def __init__(self, hidden_dim, num_heads=4):
+    def __init__(self, hidden_dim, num_heads=4, temperature: float = 1.0):
         super().__init__()
         self.cross_attn = torch.nn.MultiheadAttention(hidden_dim, num_heads, batch_first=True)
         self.layer_norm = torch.nn.LayerNorm(hidden_dim)
@@ -282,12 +282,23 @@ class CrossAttentionBlock(torch.nn.Module):
             torch.nn.Linear(hidden_dim * 4, hidden_dim),
         )
         self.layer_norm_ffn = torch.nn.LayerNorm(hidden_dim)
+        
+        
+        # --- NEW 01 MAY
+        self.temperature = float(temperature)  # 1.0 → no change
+        if self.temperature <= 0.0:
+            raise ValueError("attention_temperature must be > 0")
+        # --- NEW 01 MAY
 
     def forward(self, x, cond, x_mask=None, cond_mask=None):
         text_metrics = {}
+        
+        # scale queries to adjust soft-max temperature ## NEW 01 MAY
+        q = x if self.temperature == 1.0 else x * (1.0 / self.temperature)
 
         attn_out, attn_weights = self.cross_attn(
-            x, cond, cond,
+            # x, cond, cond,
+            q, cond, cond,
             key_padding_mask=cond_mask, # text
             need_weights=True
         )
