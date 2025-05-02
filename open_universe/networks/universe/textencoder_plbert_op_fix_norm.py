@@ -128,9 +128,18 @@ class TextEncoder(nn.Module):
         # print(f"[DEBUG TE] Processing text: type={type(input_data)}, len={len(input_data) if isinstance(input_data, list) else 'N/A'}")
         
         # ADD 02 MAY - text cleaning
-        input_data = [re.sub(f'[{re.escape(string.punctuation)}]',  # remove punctuation
-                            '', sent.lower())                      # & lowercase
+        # input_data = [re.sub(f'[{re.escape(string.punctuation)}]',  # remove punctuation
+        #                     '', sent.lower())                      # & lowercase
+        #             for sent in input_data]
+        
+        # # remvoe spaces at the beginning and end of each sentence
+        # input_data = [sent.strip() for sent in input_data]
+        
+        punct_re = re.compile(f"[{re.escape(string.punctuation)}]") # pre‑compiled once
+        input_data = [punct_re.sub("", sent.lower()).strip()        # ↓ strip trims outer spaces
                     for sent in input_data]
+        # print(f"[DEBUG TE] Processed text: {input_data}")    
+        
         # ADD 02 MAY - text cleaning
         
         

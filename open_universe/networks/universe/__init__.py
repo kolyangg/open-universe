@@ -203,8 +203,8 @@ from .mdn import MixtureDensityNetworkLoss
 from .condition_01May_512_2x import ConditionerNetwork 
 from .m_universe_gan_NS2_adj4 import UniverseGAN
 # from .m_universe_gan_NS2_adj4_lgfix import UniverseGAN
-from .textencoder_plbert_op_fix import TextEncoder
-# from .textencoder_plbert_op_fix_norm import TextEncoder
+# from .textencoder_plbert_op_fix import TextEncoder
+from .textencoder_plbert_op_fix_norm import TextEncoder
 from .score import ScoreNetwork
 
 
