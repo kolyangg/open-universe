@@ -42,9 +42,6 @@ print('imported until open_univ')
 from open_universe import utils
 print('imported utils')
 
-
-from rsync.cloud_sync import RsyncBackup   ### 02 May - added rsync
-
 log = logging.getLogger(__name__)
 
 
@@ -94,8 +91,6 @@ def main(cfg):
     callbacks = [
         checkpoint_callback,
         pl.callbacks.LearningRateMonitor(logging_interval="step"),
-        RsyncBackup(run_dir=exp_name,             # ← NEW (no‑op if env not set)        ### NEW 02 MAY
-        remote_root=os.getenv("CLOUD_EXP_ROOT")),                                       ### NEW 02 MAY
     ]
 
     print("Using the DCASE2020 SELD original dataset")
