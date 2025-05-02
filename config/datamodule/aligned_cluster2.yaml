@@ -4,26 +4,27 @@ _target_: open_universe.dataset_aligned.DataModule      # updated path
 # where to dump the very first few batches for inspection
 
 train_sample_folder: data/debug_batch_dumps/train     # "" ⇒ disable
-train_sample_batches: 8
+train_sample_batches: 1 # 8
 val_sample_folder:   data/debug_batch_dumps/val
-val_sample_batches:  770
+val_sample_batches:  20 # 770
 # ------------------------------------------------------------------ #
 
 
 train:
-  dataset: vb-train-cut
-  dl_opts: {batch_size: 8, num_workers: 12, shuffle: true,  pin_memory: true} # 8 for 2 sec, 4 for 4 sec
+  dataset: vb-train-16k
+  dl_opts: {batch_size: 16, num_workers: 12, shuffle: true,  pin_memory: true} # 8 for 2 sec, 4 for 4 sec
+  
 
 val:
-  dataset: vb-val-cut
+  dataset: vb-val-16k
   dl_opts: {batch_size: 1, num_workers: 1,  shuffle: false, pin_memory: true} # num_workers: 4
 
 test:
-  dataset: vb-test-cut
+  dataset: vb-test-16k
   dl_opts: {batch_size: 1, num_workers: 4,  shuffle: false, pin_memory: true}
 
 datasets:
-  vb-train-cut:
+  vb-train-16k:
     _target_: open_universe.dataset_aligned.NoisyDataset
     audio_path: data/voicebank_demand/16k
     text_path : data/voicebank_demand/trainset_28spk_txt
@@ -32,7 +33,9 @@ datasets:
     fs: 16000
     # word-cut hyper-params
     win_len_sec:         2.0
-    min_cut_sec:         0.2
+    # min_cut_sec:         0.75 # 0.2
+    min_cut_sec_text:    0.75
+    min_cut_sec_noise:   0.2
     max_cut_sec:         2.0
     num_samples_audio:   1
     p_random:            1.0
@@ -42,22 +45,23 @@ datasets:
     spacing_min:         0.3 # 0.1
     spacing_max:         0.6 # 0.2
     part_used:           1.0
+    audio_len: 2.0
 
-  vb-val-cut:
+  vb-val-16k:
     _target_: open_universe.dataset_aligned.NoisyDataset
-    audio_path: ${..vb-train-cut.audio_path}
-    text_path : ${..vb-train-cut.text_path}
-    textgrid_root: ${..vb-train-cut.textgrid_root}
+    audio_path: ${..vb-train-16k.audio_path}
+    text_path : ${..vb-train-16k.text_path}
+    textgrid_root: ${..vb-train-16k.textgrid_root}
     split: val
     fs: 16000
     win_len_sec: 2.0      # <- keep same len; no word-cut randomness
     part_used: 1.0
 
-  vb-test-cut:
+  vb-test-16k:
     _target_: open_universe.dataset_aligned.NoisyDataset
-    audio_path: ${..vb-train-cut.audio_path}
-    text_path : ${..vb-train-cut.text_path}
-    textgrid_root: ${..vb-train-cut.textgrid_root}
+    audio_path: ${..vb-train-16k.audio_path}
+    text_path : ${..vb-train-16k.text_path}
+    textgrid_root: ${..vb-train-16k.textgrid_root}
     split: test
     fs: 16000
     win_len_sec: 2.0

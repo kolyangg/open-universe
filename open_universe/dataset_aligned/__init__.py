@@ -25,7 +25,13 @@ Author: Robin Scheibler (@fakufaku)
 # from .static_dataset_aligned import NoisyDataset
 
 
-# 27 Apr: Aligned versions
+# # 27 Apr: Aligned versions
+
+# from .datamodule_aligned_fix import DataModule
+# from .static_dataset_aligned2 import NoisyDataset
+
+
+# 02 May: Aligned versions
 
 from .datamodule_aligned_fix import DataModule
-from .static_dataset_aligned2 import NoisyDataset
+from .static_dataset_aligned3_fix import NoisyDataset
