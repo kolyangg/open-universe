@@ -111,7 +111,13 @@ def _ensure_gs():
 if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser(description="One‑shot auth helper for rclone‑based scripts")
-    p.add_argument("remote_path", help="dropbox:/… or gs://…")
+    p.add_argument(
+        "remote_path",
+        nargs="?",                                   # ← makes it optional
+        default="dropbox:/speech_enh_backups",       # ← default value
+        help="Remote path (default: dropbox:/speech_enh_backups)",
+    )
+    
     args = p.parse_args()
     ensure_login(args.remote_path)
     print("All done ✅")
