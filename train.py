@@ -129,7 +129,7 @@ def main(cfg):
 
     wandb_logger = pl_loggers.WandbLogger(
         # project="universe_4s",
-        roject="univ_4gpu",
+        project="univ_4gpu",
         name=exp_name,
         id=wandb_id,                       # None ⇒ start new run
         resume="allow" if wandb_id else None,
