@@ -141,3 +141,14 @@ def _ensure_gs():
         check=True,
     )
     print("✅ Google Cloud account activated.")
+    
+    
+
+if __name__ == "__main__":
+    import argparse
+    p = argparse.ArgumentParser(description="One‑shot auth helper for rclone‑backed rsync scripts")
+    p.add_argument("remote_path",
+                   help="dropbox:/… or gs://… — determines which auth flow to run")
+    args = p.parse_args()
+    ensure_login(args.remote_path)
+    print("All done ✅")
