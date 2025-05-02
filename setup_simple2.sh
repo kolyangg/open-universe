@@ -88,6 +88,17 @@ sudo apt-get update -qq
 sudo apt-get install -y unzip build-essential  # gcc, g++, make …
 
 # ──────────────────────────────────────────────────────────────
+# rclone – cloud‑sync helper (needed by upload/download tools)
+# ──────────────────────────────────────────────────────────────
+echo "▶ checking rclone"
+if ! command -v rclone &>/dev/null; then
+  echo "   rclone not found – installing via conda‑forge"
+  ${PKG} install -y -c conda-forge rclone
+else
+  echo "   rclone already present ($(rclone --version | head -1))"
+fi
+
+# ──────────────────────────────────────────────────────────────
 # Montreal Forced Aligner
 # ──────────────────────────────────────────────────────────────
 echo "▶ installing MFA & downloading English models"

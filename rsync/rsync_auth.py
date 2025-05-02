@@ -1,26 +1,14 @@
-import configparser
-import getpass
-import json
-import os
-import pathlib
-import subprocess
-import sys
+import configparser, getpass, json, os, pathlib, subprocess, sys
 from typing import Optional
 
-CONFIG_DIR   = pathlib.Path.home() / ".config" / "rclone"
-RCLONE_CONF  = CONFIG_DIR / "rclone.conf"
-DROP_REMOTE  = "dropbox"          # remote name we’ll look for / create
-GS_PROFILE   = "gs_service_acc"   # label for stored key (ours only)
+CONFIG_DIR  = pathlib.Path.home() / ".config" / "rclone"
+RCLONE_CONF = CONFIG_DIR / "rclone.conf"
+DROP_REMOTE = "dropbox"
+GS_PROFILE  = "gs_service_acc"                 # just a filename for stored key
 
-# -----------------------------------------------------------------------------
-# Helper utilities
-# -----------------------------------------------------------------------------
-
-def _save_rclone_conf(text: str):
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    with RCLONE_CONF.open("a") as fh:
-        fh.write("\n" + text.strip() + "\n")
-
+# ──────────────────────────────────────────────────────────────
+# Helpers
+# ──────────────────────────────────────────────────────────────
 def _dropbox_cfg_exists() -> bool:
     if not RCLONE_CONF.exists():
         return False
@@ -28,110 +16,85 @@ def _dropbox_cfg_exists() -> bool:
     cp.read(RCLONE_CONF)
     return DROP_REMOTE in cp and "token" in cp[DROP_REMOTE]
 
-def _prompt_multiline(msg: str) -> str:
-    print(msg)
-    print("(finish with an empty line)")
-    buf = []
-    while True:
-        try:
-            line = input()
-        except EOFError:
-            break
-        if line.strip() == "":
-            break
-        buf.append(line)
-    return "\n".join(buf)
+def _write_dropbox_token(access_token: str):
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    cp = configparser.ConfigParser()
+    if RCLONE_CONF.exists():
+        cp.read(RCLONE_CONF)
 
-# -----------------------------------------------------------------------------
-#  Public API
-# -----------------------------------------------------------------------------
+    cp[DROP_REMOTE] = {
+        "type":  "dropbox",
+        "token": json.dumps(
+            {
+                "access_token": access_token,
+                "token_type":   "bearer",
+                "expiry":       "0001-01-01T00:00:00Z",
+            }
+        ),
+    }
+    with RCLONE_CONF.open("w") as fh:
+        cp.write(fh)
+    print("✅ Dropbox token saved to rclone.conf")
 
+# ──────────────────────────────────────────────────────────────
+# Public API
+# ──────────────────────────────────────────────────────────────
 def ensure_login(remote_root: str):
-    """
-    Ensures this process (and future rclone/rclone‑based scripts) are fully
-    authenticated for the cloud backend implied by *remote_root*.
-    Supported:
-        • dropbox:/…   (uses rclone’s Dropbox backend)
-        • gs://…       (Google Cloud Storage via gcloud + service‑account)
-    """
-
     if remote_root.startswith("dropbox:"):
         _ensure_dropbox()
     elif remote_root.startswith("gs://"):
         _ensure_gs()
-    else:
-        # Plain SSH / local path – nothing special
+    else:        # local path / ssh
         return
 
-
-# -----------------------------------------------------------------------------
-#  Backend‑specific helpers
-# -----------------------------------------------------------------------------
-
+# ──────────────────────────────────────────────────────────────
+# Dropbox
+# ──────────────────────────────────────────────────────────────
 def _ensure_dropbox():
-    """
-    1) If rclone config already contains a working 'dropbox' remote → done.
-    2) Else ask user if they want to paste a config snippet. If yes → save it.
-    3) Otherwise run `rclone config` and let the user auth through the browser.
-    """
     if _dropbox_cfg_exists():
-        return                                                # already ok
+        return                                   # already configured
 
-    have_cfg = input(
-        "🛈 Dropbox remote not configured.\n"
-        "Do you already have a dropbox section from rclone.conf to paste? [y/N] "
-    ).strip().lower().startswith("y")
+    print("🛈 No Dropbox credentials found for rclone.")
 
-    if have_cfg:
-        snippet = _prompt_multiline(
-            "\nPaste the **[dropbox]** section (including 'token = {...}')"
-        )
-        if "[dropbox]" not in snippet:
-            snippet = f"[dropbox]\n{snippet}"
-        _save_rclone_conf(snippet)
-        if not _dropbox_cfg_exists():
-            print("❌ Could not detect valid token in pasted config. Please try again.")
+    if input("Do you already have a Dropbox **access‑token** to paste? [y/N] ").lower().startswith("y"):
+        token = getpass.getpass("🔐  Paste access‑token (input hidden): ").strip()
+        if not token:
+            print("❌ Empty token – aborting.")
             sys.exit(1)
-        print("✅ Dropbox credentials saved.")
+        _write_dropbox_token(token)
         return
 
-    # Fallback – launch interactive wizard
+    # Fallback – run the full rclone wizard
     print("Launching rclone config wizard …")
     subprocess.run(["rclone", "config"], check=True)
 
-
+# ──────────────────────────────────────────────────────────────
+# Google‑Cloud  (unchanged, just tidied a little)
+# ──────────────────────────────────────────────────────────────
 def _ensure_gs():
-    """
-    1) Checks if gcloud already has an active account with valid ADC.
-    2) Otherwise asks if user wants to paste a service‑account JSON key.
-    3) Else prompts for a path to a key and activates it via gcloud.
-    """
-    # Quick test: does 'gcloud auth print-access-token' succeed?
-    try:
+    try:                                         # already authed?
         subprocess.run(
             ["gcloud", "auth", "print-access-token"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=True,
         )
-        return                            # already authenticated
+        return
     except subprocess.CalledProcessError:
         pass
 
-    paste = input(
-        "🛈 Google Cloud auth not found.\n"
-        "Do you have a service‑account **JSON** key to paste now? [y/N] "
-    ).strip().lower().startswith("y")
-
-    if paste:
-        json_key = _prompt_multiline("\nPaste the service‑account JSON:")
+    if input("🛈 Paste service‑account **JSON** key now? [y/N] ").lower().startswith("y"):
+        print("Enter the JSON key, finish with Ctrl‑D (or empty line):")
+        json_key = sys.stdin.read().strip()
+        if not json_key:
+            print("❌ No JSON received – aborting.")
+            sys.exit(1)
         key_path = CONFIG_DIR / f"{GS_PROFILE}.json"
         key_path.write_text(json_key)
     else:
-        key_path_str = getpass.getpass(
-            "Path to service‑account key (.json): "
-        ).strip()
-        key_path = pathlib.Path(key_path_str).expanduser().resolve()
+        key_path = pathlib.Path(
+            getpass.getpass("Path to service‑account key (.json): ").strip()
+        ).expanduser()
         if not key_path.exists():
             print(f"❌ File not found: {key_path}")
             sys.exit(1)
@@ -141,14 +104,14 @@ def _ensure_gs():
         check=True,
     )
     print("✅ Google Cloud account activated.")
-    
-    
 
+# ──────────────────────────────────────────────────────────────
+# CLI helper – optional
+# ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import argparse
-    p = argparse.ArgumentParser(description="One‑shot auth helper for rclone‑backed rsync scripts")
-    p.add_argument("remote_path",
-                   help="dropbox:/… or gs://… — determines which auth flow to run")
+    p = argparse.ArgumentParser(description="One‑shot auth helper for rclone‑based scripts")
+    p.add_argument("remote_path", help="dropbox:/… or gs://…")
     args = p.parse_args()
     ensure_login(args.remote_path)
     print("All done ✅")
