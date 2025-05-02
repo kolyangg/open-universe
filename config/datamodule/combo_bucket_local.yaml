@@ -9,7 +9,7 @@ width_pct: 0.05 # 0.05             # bucket tolerance (fallback)
 width_sec: null # 0.25             # (use one or the other)
 order: asc   # asc          # asc | desc | rand             (bucket modes)
 
-print_collate_log: true       # print to stdout
+print_collate_log: false       # print to stdout
 wandb_collate_log:  true      # send to wandb.run.log
 
 # --------------------------------------------------------------------- #
