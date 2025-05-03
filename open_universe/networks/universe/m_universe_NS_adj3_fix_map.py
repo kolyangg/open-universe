@@ -302,7 +302,7 @@ class Universe(pl.LightningModule):
             mix = torch.stack([mix] * ensemble, dim=0)
             mix = mix.view((-1,) + mix_shape[1:])
             
-            ### ADD 01 MAY (MINOR)
+            ### ADD 01 MAY (MINOR) - NOT SURE IT'S NEEDED BASED ON ORIG VERSION
             if mask is not None:                           
                 mask = (torch.stack([mask] * ensemble, dim=0)
                         .view((-1, mask.shape[-1])))
@@ -315,7 +315,7 @@ class Universe(pl.LightningModule):
             target, _ = self.pad(target, pad=pad_)
         
         
-        ### NEW 01 MAY
+        ### NEW 01 MAY - NOT SURE IT'S NEEDED BASED ON ORIG VERSION
         if mask is not None:
             mask = torch.nn.functional.pad(
                 mask, (pad_ // 2, pad_ - pad_ // 2))     # NEW – keep the same length
@@ -419,8 +419,10 @@ class Universe(pl.LightningModule):
         # remove the padding and restore signal scale
         x = self.unpad(x, pad_)
 
+        #### NOT SURE THIS IS NEEDED BASED ON ORIG VERSION
         if mask is not None and pad_ > 0:                       # ← NEW
             mask = mask[..., pad_ // 2 : -(pad_ - pad_ // 2)]   # same crop
+        #### NOT SURE THIS IS NEEDED BASED ON ORIG VERSION
 
         x = torch.nn.functional.pad(x, (0, mix_len - x.shape[-1]))
         
