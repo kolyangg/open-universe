@@ -66,4 +66,4 @@ datasets:
     split: test
     fs: 16000
     win_len_sec: 2.0
-    part_used: 1.0
+    part_used: 0.01

@@ -59,7 +59,7 @@ datasets:
         split: val
         # max clip length kept in **all** modes
         audio_len: 12.0 # UPDATE: 4 seconds here too
-        part_used: 1.0 # 0.1 # 1.0  # Use 20% of validation data for faster validation
+        part_used: 0.01 # 0.1 # 1.0  # Use 20% of validation data for faster validation
 
     vb-test-16k:
         _target_: open_universe.datasets.NoisyDataset
@@ -69,4 +69,4 @@ datasets:
         split: test
         # max clip length kept in **all** modes
         audio_len: 12.0 # UPDATE: 4 seconds here too
-        part_used: 1.0  # Use full test set for final evaluation
+        part_used: 0.01  # Use full test set for final evaluation

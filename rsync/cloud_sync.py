@@ -3,7 +3,7 @@ import pytorch_lightning as pl
 from hydra.utils import get_original_cwd
 from rsync.rsync_auth import ensure_login
 
-EXCLUDE_PATTERNS = ["checkpoints/universe/exper/best-model.ckpt"]
+EXCLUDE_PATTERNS = ["checkpoints/universe/exper/best-model.ckpt", "data/"]
 
 # ──────────────────────────────────────────────────────────────
 # background worker
