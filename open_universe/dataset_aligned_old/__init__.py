@@ -40,4 +40,4 @@ Author: Robin Scheibler (@fakufaku)
 # 03 May: Simplied version of aligned
 
 from .datamodule_aligned_fix import DataModule
-from .static_dataset_aligned3_easy import NoisyDataset
+from .static_dataset_aligned3_fix import NoisyDataset

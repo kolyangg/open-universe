@@ -5,7 +5,8 @@
 defaults:
   - _self_
   # - override /datamodule: default_NS # updated
-  - override /datamodule: aligned_local3_old # updated
+  - override /datamodule: aligned_cluster3_old # updated
+  # - override /datamodule: aligned_local3_old # updated
   - override /model: text_512_8h # default_NS # updated2
   - override /trainer: default
 

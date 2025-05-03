@@ -1,10 +1,10 @@
-_target_: open_universe.dataset_aligned.DataModule      # updated path
+_target_: open_universe.dataset_aligned_old.DataModule      # updated path
 
 # ------------------------------------------------------------------ #
 # where to dump the very first few batches for inspection
 
 train_sample_folder: data/debug_batch_dumps/train     # "" ⇒ disable
-train_sample_batches: 1 # 8
+train_sample_batches: 2 # 8
 val_sample_folder:   data/debug_batch_dumps/val
 val_sample_batches:  20 # 770
 # ------------------------------------------------------------------ #
@@ -25,7 +25,7 @@ test:
 
 datasets:
   vb-train-16k:
-    _target_: open_universe.dataset_aligned.NoisyDataset
+    _target_: open_universe.dataset_aligned_old.NoisyDataset
     audio_path: data/voicebank_demand/16k
     text_path : data/voicebank_demand/trainset_28spk_txt
     textgrid_root: data/voicebank_demand/textgrids
@@ -44,22 +44,22 @@ datasets:
     starting_noise_max:  0.2
     spacing_min:         0.3 # 0.1
     spacing_max:         0.6 # 0.2
-    part_used:           1.0
     max_len_sec:         1e9 # limitless
-    audio_len: 2.0
+    audio_len:           2.0
+    part_used:           1.0 # 0.01 # 1.0
 
   vb-val-16k:
-    _target_: open_universe.dataset_aligned.NoisyDataset
+    _target_: open_universe.dataset_aligned_old.NoisyDataset
     audio_path: ${..vb-train-16k.audio_path}
     text_path : ${..vb-train-16k.text_path}
     textgrid_root: ${..vb-train-16k.textgrid_root}
     split: val
     fs: 16000
     win_len_sec: 2.0      # <- keep same len; no word-cut randomness
-    part_used: 1.0
+    part_used: 0.01 # 1.0
 
   vb-test-16k:
-    _target_: open_universe.dataset_aligned.NoisyDataset
+    _target_: open_universe.dataset_aligned_old.NoisyDataset
     audio_path: ${..vb-train-16k.audio_path}
     text_path : ${..vb-train-16k.text_path}
     textgrid_root: ${..vb-train-16k.textgrid_root}

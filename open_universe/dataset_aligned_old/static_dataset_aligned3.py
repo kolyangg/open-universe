@@ -66,8 +66,8 @@ class NoisyDataset(torch.utils.data.Dataset):
         super().__init__()
 
         # backward‑compat alias
-        # if max_len_sec is None and audio_len is not None:
-        #     max_len_sec = audio_len
+        if max_len_sec is None and audio_len is not None:
+            max_len_sec = audio_len
         if max_len_sec is None:
             max_len_sec = 1e9            # effectively no limit
 
@@ -236,40 +236,20 @@ class NoisyDataset(torch.utils.data.Dataset):
         if not noise_blocks:
                noise_blocks.append((0, 1))
 
-        # # --- window assembly (mirrors make_debug_set) -----------------
-        # remaining=tgt_N; cursor=0
-        # chosen_src=[]; blocks=[]; mask=torch.ones(tgt_N)
+        # --- window assembly (mirrors make_debug_set) -----------------
+        remaining=tgt_N; cursor=0
+        chosen_src=[]; blocks=[]; mask=torch.ones(tgt_N)
 
 
-        # # --- window assembly (mirrors make_debug_set) -----------------
-        # remaining = tgt_N
-        # cursor    = 0
-        # chosen_src, blocks = [], []
-        # mask = torch.ones(tgt_N)
-
-        # # optional starting noise
-        # start_N = int(rng.uniform(self.starting_noise_min,
-        #                         self.starting_noise_max) * fs)
-        # if start_N and remaining >= start_N and noise_blocks:
-        
-        
         # --- window assembly (mirrors make_debug_set) -----------------
         remaining = tgt_N
         cursor    = 0
         chosen_src, blocks = [], []
         mask = torch.ones(tgt_N)
 
-        # ---------------------------------------------------------------
-        # 1) decide if we are in “short-utterance” mode
-        # ---------------------------------------------------------------
-        short_utt = noisy.shape[-1] <= tgt_N
-
-        # optional starting noise → **skip for short utterances**
-        start_N = 0
-        if not short_utt:
-            start_N = int(rng.uniform(self.starting_noise_min,
-                                       self.starting_noise_max) * fs)
-
+        # optional starting noise
+        start_N = int(rng.uniform(self.starting_noise_min,
+                                self.starting_noise_max) * fs)
         if start_N and remaining >= start_N and noise_blocks:
 
             nb = rng.choice(noise_blocks)              # pick one candidate
@@ -288,7 +268,7 @@ class NoisyDataset(torch.utils.data.Dataset):
             
         
         # ----- short-utterance handling (whole utterance first) -------------
-        # short_utt = noisy.shape[-1] <= tgt_N
+        short_utt = noisy.shape[-1] <= tgt_N
         if short_utt:
             full_txt = self._norm_txt(" ".join(w for *_, w in iv)) if iv else ""
             spans    = [(0, noisy.shape[-1], full_txt)]   # one span = whole utt
@@ -298,7 +278,6 @@ class NoisyDataset(torch.utils.data.Dataset):
             blocks.append((cursor, cursor + noisy.shape[-1], full_txt))
             cursor    += noisy.shape[-1]
             remaining -= noisy.shape[-1]
-            remaining = max(remaining, 0)     # safety
 
 
         
