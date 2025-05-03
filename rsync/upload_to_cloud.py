@@ -6,6 +6,7 @@ from rsync_auth import ensure_login
 # 📁 Define folders or files (glob-style) to exclude from upload
 EXCLUDE_PATTERNS = [
     "checkpoints/universe/exper/best-model.ckpt",
+    "data/"
 ]
 
 def upload_to_cloud(local_exp_path: str, remote_exp_root: str):
