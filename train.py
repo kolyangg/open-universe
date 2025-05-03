@@ -153,7 +153,8 @@ def main(cfg):
         pl.callbacks.LearningRateMonitor(logging_interval="step"),
         # RsyncBackup(run_dir=exp_name,             # ← NEW (no‑op if env not set)        ### NEW 02 MAY
         # remote_root=os.getenv("CLOUD_EXP_ROOT")),  
-        RsyncBackup(remote_root=os.getenv("CLOUD_EXP_ROOT")) ### NEW 02 MAY
+        RsyncBackup(remote_root=os.getenv("CLOUD_EXP_ROOT") or print("[RsyncBackup] CLOUD_EXP_ROOT not set – uploads DISABLED")) ### NEW 02 MAY
+        
     ]
 
     print("Using the DCASE2020 SELD original dataset")
