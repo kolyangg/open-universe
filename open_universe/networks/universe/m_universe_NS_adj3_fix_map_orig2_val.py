@@ -1168,6 +1168,8 @@ class Universe(pl.LightningModule):
                 self.have_text = text.numel() > 0
             else:
                 self.have_text = False
+        else:
+            self.have_text = False
         
         # print(f"[DEBUG] validation_step sees text => {text}")
         # print(f"[DEBUG] self.have_text => {self.have_text}")
@@ -1181,12 +1183,8 @@ class Universe(pl.LightningModule):
             mix_raw    = mix_raw    * m
             target_raw = target_raw * m
 
-        batch_scaled, *stats = self.normalize_batch(
-            (mix_raw, target_raw), norm=self.normalization_norm
-        )
+        batch_scaled, *stats = self.normalize_batch((mix_raw, target_raw), norm=self.normalization_norm)
         mix, target = batch_scaled
-        
-        
         batch_size = mix.shape[0]
 
         tb = torch.linspace(0.0, 1.0, self.val_kwargs.n_bins + 1, device=mix.device)
@@ -1264,6 +1262,7 @@ class Universe(pl.LightningModule):
             else:
                 mix_, target_, mask_ = mix_raw, target_raw, mask
                 est = self.enhance(mix_, rng=self.rng, mask=mask_)
+                print(f"[DEBUG] enhancement without text")
 
             # zero‑out padding region in the estimate so metrics ignore it
             if mask_ is not None:

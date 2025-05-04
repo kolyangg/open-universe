@@ -27,7 +27,8 @@ from .. import bigvgan as gan
 from .blocks import PReLU_Conv
 # Import the Universe base class that already supports text conditioning.
 # from .universe_NS_try import Universe
-from .universe_NS import Universe
+# from .universe_NS import Universe
+from .universe_NS_fixmetric import Universe # 04 MAY UPD (VAL METRIC ISSUE)
 
 log = logging.getLogger(__name__)
 

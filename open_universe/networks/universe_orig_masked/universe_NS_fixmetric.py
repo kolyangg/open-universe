@@ -849,7 +849,7 @@ class Universe(pl.LightningModule):
             
             # est = self.enhance(mix, rng=self.rng)
             
-            
+            # ------------- enhancement with mask --------------
             mix_, target_, mask_ = mix_raw, target_raw, mask
             est = self.enhance(mix_, rng=self.rng, mask=mask_)
             
@@ -862,7 +862,7 @@ class Universe(pl.LightningModule):
 
             # ✅ Log validation loss values
             for name, loss in self.enh_losses.items():
-                val_metric = loss(est, target)
+                val_metric = loss(est, target_) ### FIX 04 MAY
                 if not isinstance(val_metric, dict):
                     val_metric = {"": val_metric}
 
