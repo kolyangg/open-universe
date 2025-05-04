@@ -40,11 +40,12 @@ condition_model:
   # text_encoder_config:
   #   _target_: open_universe.networks.universe.TextEncoder ### NEW ###
   #   hidden_dim: 512 # 512 # 256
-  text_lr_scale: 1.0
   
-  # --- NEW: cross-attention hyper-params ------------------------
-  cross_attention_num_heads: 8          # how many heads to use
-  attention_temperature: 0.6      # soft-max temperature (1.0 = no scaling)
+  # text_lr_scale: 1.0
+  
+  # # --- NEW: cross-attention hyper-params ------------------------
+  # cross_attention_num_heads: 8          # how many heads to use
+  # attention_temperature: 0.6      # soft-max temperature (1.0 = no scaling)
 
 
 diffusion:

@@ -208,16 +208,25 @@ from .mdn import MixtureDensityNetworkLoss
 # from .score import ScoreNetwork
 
 
-# # # 03 May version - trying to fix for no text case
-# from .condition_01May_512 import ConditionerNetwork 
-# from .condition_01May_512_2x import ConditionerNetwork 
-from .condition_01May_512_2x_map import ConditionerNetwork 
-# from .m_universe_gan_NS2_adj4_fix import UniverseGAN
-from .m_universe_gan_NS2_adj4_fix2 import UniverseGAN # fixing for no text case (LR scheduler)
-# from .m_universe_gan_NS2_adj4_lgfix import UniverseGAN
-# from .textencoder_plbert_op_fix import TextEncoder
+# # # # 03 May version - trying to fix for no text case
+# # from .condition_01May_512 import ConditionerNetwork 
+# # from .condition_01May_512_2x import ConditionerNetwork 
+# from .condition_01May_512_2x_map import ConditionerNetwork 
+# # from .m_universe_gan_NS2_adj4_fix import UniverseGAN
+# from .m_universe_gan_NS2_adj4_fix2 import UniverseGAN # fixing for no text case (LR scheduler)
+# # from .m_universe_gan_NS2_adj4_lgfix import UniverseGAN
+# # from .textencoder_plbert_op_fix import TextEncoder
+# from .textencoder_plbert_op_fix_norm import TextEncoder
+# from .score import ScoreNetwork
+
+
+# # # 04 May version - check vs original version
+from .condition_orig_masked import ConditionerNetwork 
+# from .m_universe_gan_NS2_adj4_fix2 import UniverseGAN # fixing for no text case (LR scheduler)
+from .m_universe_gan_NS2_adj4_fix2_orig import UniverseGAN # fixing for no text case (LR scheduler)
 from .textencoder_plbert_op_fix_norm import TextEncoder
 from .score import ScoreNetwork
+
 
 
 
