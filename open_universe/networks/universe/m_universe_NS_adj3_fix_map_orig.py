@@ -837,7 +837,7 @@ class Universe(pl.LightningModule):
             
             ### 04 MAY FIX ###
             mix_raw, target_raw, text, mask = batch
-            print(f"[DEBUG] validation_step sees text => {text}")
+            # print(f"[DEBUG] validation_step sees text => {text}")
 
             if text is None:
                 self.have_text = False
