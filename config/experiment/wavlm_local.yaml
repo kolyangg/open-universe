@@ -5,8 +5,8 @@
 defaults:
   - _self_
   # - override /datamodule: default_NS # updated
-  - override /datamodule: wavlm_local # updated
-  - override /model: wavlm # default_NS # updated2
+  - override /datamodule: combo_bucket_cluster_notext # updated
+  - override /model: wavlm_masked # default_NS # updated2
   - override /trainer: default
 
 trainer:

@@ -1,0 +1,635 @@
+# Copyright 2024 LY Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+Conditioner network for the UNIVERSE model.
+
+Author: Robin Scheibler (@fakufaku)
+"""
+import math
+
+import torch
+import torchaudio
+from hydra.utils import instantiate
+
+from transformers import WavLMForXVector # NEW 3 MAY
+
+from .blocks import (
+    BinomialAntiAlias,
+    ConvBlock,
+    PReLU_Conv,
+    cond_weight_norm,
+)
+
+
+def make_st_convs(
+    ds_factors,
+    input_channels,
+    num_layers=None,
+    use_weight_norm=False,
+    use_antialiasing=False,
+):
+    if num_layers is None:
+        num_layers = len(ds_factors) - 1
+    st_convs = torch.nn.ModuleList()
+    rates = [ds_factors[-1]]
+    for r in ds_factors[-2::-1]:
+        rates.append(rates[-1] * r)
+    rates = rates[::-1]
+    for i in range(len(ds_factors)):
+        if i >= num_layers:
+            st_convs.append(None)
+        else:
+            i_chan = input_channels * 2**i
+            o_chan = input_channels * 2 ** len(ds_factors)
+            new_block = PReLU_Conv(
+                i_chan,
+                o_chan,
+                kernel_size=rates[i],
+                stride=rates[i],
+                use_weight_norm=use_weight_norm,
+            )
+            if use_antialiasing:
+                new_block = torch.nn.Sequential(
+                    BinomialAntiAlias(rates[i] * 2 + 1), new_block
+                )
+            st_convs.append(new_block)
+    return st_convs
+
+
+class MelAdapter(torch.nn.Module):
+    def __init__(
+        self, n_mels, output_channels, ds_factor, oversample=2, use_weight_norm=False
+    ):
+        super().__init__()
+        self.ds_factor = ds_factor
+        n_fft = oversample * ds_factor
+        self.mel_spec = torchaudio.transforms.MelSpectrogram(
+            sample_rate=24000,
+            n_mels=n_mels,
+            n_fft=n_fft,
+            hop_length=ds_factor,
+            center=False,
+        )
+        self.conv = cond_weight_norm(
+            torch.nn.Conv1d(n_mels, output_channels, kernel_size=3, padding="same"),
+            use=use_weight_norm,
+        )
+        self.conv_block = ConvBlock(output_channels, use_weight_norm=use_weight_norm)
+
+        # workout the padding to get a good number of frames
+        pad_tot = n_fft - ds_factor
+        self.pad_left, self.pad_right = pad_tot // 2, pad_tot - pad_tot // 2
+
+    def compute_mel_spec(self, x):
+        r = x.shape[-1] % self.ds_factor
+        if r != 0:
+            pad = self.ds_factor - r
+        else:
+            pad = 0
+        x = torch.nn.functional.pad(x, (self.pad_left, pad + self.pad_right))
+        x = self.mel_spec(x)
+        x = x.squeeze(1)
+
+        # the paper mentions only that they normalize the mel-spec, not how
+        # I am trying a simple global normalization so that frames have
+        # unit energy on average
+        norm = (x**2).sum(dim=-2, keepdim=True).mean(dim=-1, keepdim=True).sqrt()
+        x = x / norm.clamp(min=1e-5)
+
+        return x
+
+    def forward(self, x):
+        x = self.compute_mel_spec(x)
+        x = self.conv(x)
+        x, *_ = self.conv_block(x)
+        return x
+
+
+
+# # 21 Apr version
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torchaudio
+from transformers import WavLMModel
+
+
+
+class WavLMAdapter(nn.Module):
+    def __init__(self,
+                 output_channels: int,
+                 ds_factor: int,
+                 sample_rate: int = 16_000,          # match data SR
+                 # model_name: str = "microsoft/wavlm-base",
+                 # model_name: str = "microsoft/wavlm-large",
+                 model_name: str = "microsoft/wavlm-base-sv",
+                 feature_stage: str = "conv",
+                 oversample: int = 2,
+                 use_weight_norm: bool = False):
+        super().__init__()
+        self.ds_factor   = ds_factor
+        self.oversample  = oversample
+        self.feature_stage = feature_stage.lower()
+
+        # same padding as MelAdapter
+        n_fft   = oversample * ds_factor
+        pad_tot = n_fft - ds_factor
+        self.pad_left, self.pad_right = pad_tot // 2, pad_tot - pad_tot // 2
+
+        # -------------- WavLM on GPU ----------------
+        self.wavlm = WavLMModel.from_pretrained(model_name).eval()
+        for p in self.wavlm.parameters():
+            p.requires_grad = False
+        if sample_rate != 16_000:
+            self.resample = torchaudio.transforms.Resample(
+                sample_rate, 16_000, dtype=torch.float32)
+        else:
+            self.resample = None
+        # --------------------------------------------
+
+        in_dim = (self.wavlm.config.conv_dim[-1] if self.feature_stage == "conv"
+                  else self.wavlm.config.hidden_size)
+
+        self.proj = cond_weight_norm(
+            nn.Conv1d(in_dim, output_channels, kernel_size=3, padding="same"),
+            use=use_weight_norm)
+        self.norm = nn.LayerNorm(output_channels)              # NEW
+        self.conv_block = ConvBlock(output_channels, use_weight_norm=use_weight_norm)
+        print(f'WavLMAdapter initialized - using {model_name}')
+
+    # ----------------------------------------------------------
+    @torch.no_grad()
+    def _wavlm_feats(self, wav16: torch.Tensor) -> torch.Tensor:
+        if self.feature_stage == "conv":
+            return self.wavlm.feature_extractor(wav16)
+        out = self.wavlm(wav16, output_hidden_states=True, return_dict=True)
+        return out.hidden_states[1].transpose(1, 2)
+
+    # ----------------------------------------------------------
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.dim() == 2:
+            x = x.unsqueeze(1)
+        elif x.dim() != 3 or x.size(1) != 1:
+            raise RuntimeError("expected (B,1,T)")
+
+        # 1) symmetric padding
+        rem = x.size(-1) % self.ds_factor
+        x_pad = F.pad(x,
+                      (self.pad_left,
+                       self.ds_factor - rem + self.pad_right) if rem
+                      else (self.pad_left, self.pad_right))
+
+        # 2) resample if needed & extract conv features
+        wav = x_pad.squeeze(1)
+        if self.resample is not None:
+            wav = self.resample(wav)
+        feats = self._wavlm_feats(wav)
+
+        # 3) exact frame count
+        # target_L = (x_pad.size(-1) - 400) // 320 + 1         # precise
+        # if feats.size(-1) != target_L:
+        #     feats = F.interpolate(feats, size=target_L, mode="nearest")
+        
+        # target length that matches conditioner down‑sampling
+        target_L = x_pad.size(-1) // self.ds_factor - (self.oversample - 1)
+
+        if feats.size(-1) != target_L and target_L > 0:
+            # WavLM stride is 320; use linear interpolation to reach 160‑stride length
+            feats = F.interpolate(feats, size=target_L, mode="linear", align_corners=False)
+
+        # 4) energy normalisation
+        feats = feats / feats.pow(2).mean(
+            dim=(-2, -1), keepdim=True).sqrt().clamp(1e-5)
+
+        # 5) projection → LayerNorm → ConvBlock
+        y = self.proj(feats)
+        y = self.norm(y.transpose(1, 2)).transpose(1, 2)     # NEW
+        y, *_ = self.conv_block(y)
+        return y
+
+    # backward‑compat
+    def compute_mel_spec(self, x):
+        return self.forward(x)
+    
+class WavLMDualAdapter(nn.Module):
+    """
+    Returns the SAME tensor shape as the old adapter:
+       (B, output_channels, ⌊T/ds_factor⌋),
+    but the content now mixes frame‑level generic features with an
+    utterance‑level x‑vector that carries speaker identity.
+    The module is fully frozen ⇒ adds negligible cost.
+    """
+
+    def __init__(self, output_channels, ds_factor,
+                 sample_rate        = 16_000,
+                 model_name         = "microsoft/wavlm-base-plus-sv",
+                 feature_stage      = "conv",
+                 oversample         = 2,
+                 use_weight_norm    = False):
+        super().__init__()
+        self.ds_factor   = ds_factor
+        self.oversample  = oversample
+        self.stage       = feature_stage.lower()
+
+        # ─── padding identical to MelAdapter ──────────────────
+        n_fft   = oversample * ds_factor
+        pad_tot = n_fft - ds_factor
+        self.pad_left, self.pad_right = pad_tot // 2, pad_tot - pad_tot // 2
+
+        # ─── frozen WavLM front‑end (generic) ─────────────────
+        self.wavlm_frame = WavLMModel.from_pretrained(model_name).eval()
+        for p in self.wavlm_frame.parameters(): p.requires_grad = False
+
+        # ─── frozen speaker x‑vector branch ───────────────────
+        self.wavlm_spk = WavLMForXVector.from_pretrained(model_name).eval()
+        for p in self.wavlm_spk.parameters():  p.requires_grad = False
+
+        # optional resampler
+        self.resample = (
+            torchaudio.transforms.Resample(sample_rate, 16_000, dtype=torch.float32)
+            if sample_rate != 16_000 else None)
+
+        # dimensionalities
+        in_dim = ( self.wavlm_frame.config.conv_dim[-1]
+                   if self.stage == "conv"
+                   else self.wavlm_frame.config.hidden_size )
+
+        # ① frame branch projection
+        self.proj_frame = cond_weight_norm(
+            nn.Conv1d(in_dim, output_channels, 3, padding="same"),
+            use=use_weight_norm)
+
+        # ② speaker branch projection  (256‑D x‑vector → output_channels)
+        
+        # ② speaker branch projection  (xvec_dim → output_channels)
+        embeddings_size  = 512
+        if hasattr(self.wavlm_spk.config, "embeddings_size"):
+            xvec_dim = self.wavlm_spk.config.embeddings_size
+        else:
+            xvec_dim = embeddings_size
+        
+        # xvec_dim = self.wavlm_spk.config.embeddings_size        # 512 for -sv
+        # (older versions use .proj_dim or .output_dim – fall back)
+        if not isinstance(xvec_dim, int):
+            xvec_dim = getattr(self.wavlm_spk.config, "proj_dim",
+                                getattr(self.wavlm_spk.config, "output_dim", 256))
+        self.proj_spk = nn.Linear(xvec_dim, output_channels, bias=False)
+
+        self.norm = nn.LayerNorm(output_channels)
+        self.conv_block = ConvBlock(output_channels,
+                                    use_weight_norm=use_weight_norm)
+
+        print("[WavLMDualAdapter] generic + speaker enabled")
+
+    # ----------------------------------------------------------
+    @torch.no_grad()
+    def _frame_feats(self, wav16):
+        if self.stage == "conv":
+            return self.wavlm_frame.feature_extractor(wav16)
+        out = self.wavlm_frame(wav16, output_hidden_states=True, return_dict=True)
+        return out.hidden_states[1].transpose(1, 2)
+
+    @torch.no_grad()
+    def _xvector(self, wav16):
+        emb = self.wavlm_spk(wav16, return_dict=True).embeddings  # (B,256)
+        return torch.nn.functional.normalize(emb, dim=-1)
+
+    # ----------------------------------------------------------
+    def forward(self, x):
+        if x.dim() == 2:   x = x.unsqueeze(1)
+        assert x.dim() == 3 and x.size(1) == 1, "expect (B,1,T)"
+
+        # 1) centre padding (matches MelAdapter timing)
+        rem   = x.size(-1) % self.ds_factor
+        x_pad = F.pad(x, (self.pad_left,
+                          self.ds_factor - rem + self.pad_right) if rem
+                          else (self.pad_left, self.pad_right))
+
+        # 2) resample to 16 kHz if necessary
+        wav = x_pad.squeeze(1)
+        if self.resample is not None: wav = self.resample(wav)
+
+        # 3) generic frame features
+        feats = self._frame_feats(wav)                         # (B,C0,L0)
+
+        # time‑axis down‑sampling to exactly floor(T/ds_factor)-(oversample-1)
+        target_L = x_pad.size(-1) // self.ds_factor - (self.oversample - 1)
+        if feats.size(-1) != target_L and target_L > 0:
+            feats = F.interpolate(feats, size=target_L, mode="linear",
+                                  align_corners=False)
+
+        # 4) speaker x‑vector → broadcast
+        spk = self._xvector(wav)                               # (B,256)
+        spk = self.proj_spk(spk).unsqueeze(-1)                 # (B,C,1)
+
+        # 5) energy normalisation for frame stream
+        feats = feats / feats.pow(2).mean(
+                    dim=(-2, -1), keepdim=True).sqrt().clamp(1e-5)
+
+        # 6) fuse streams by simple addition (γ=1) – keeps shape
+        feats = feats + spk                                    # broadcast
+
+        # 7) local projection + conv block (unchanged API)
+        y = self.proj_frame(feats)                             # (B,C,L)
+        y = self.norm(y.transpose(1, 2)).transpose(1, 2)
+        y, *_ = self.conv_block(y)
+        return y                                               # (B,C,L)
+
+    # for backward‑compat with Conditioner
+    def compute_mel_spec(self, x):
+        return self.forward(x)
+
+
+class ConditionerEncoder(torch.nn.Module):
+    def __init__(
+        self,
+        ds_factors,
+        input_channels,
+        with_gru_residual=False,
+        with_extra_conv_block=False,
+        act_type="prelu",
+        use_weight_norm=False,
+        seq_model="gru",
+        use_antialiasing=False,
+    ):
+        super().__init__()
+
+        self.with_gru_residual = with_gru_residual
+        self.extra_conv_block = with_extra_conv_block
+
+        c = input_channels
+
+        self.ds_modules = torch.nn.ModuleList(
+            [
+                ConvBlock(
+                    c * 2**i,
+                    r,
+                    "down",
+                    act_type=act_type,
+                    use_weight_norm=use_weight_norm,
+                    antialiasing=use_antialiasing,
+                )
+                for i, r in enumerate(ds_factors)
+            ]
+        )
+
+        # the strided convolutions to adjust rate and channels to latent space
+        self.st_convs = make_st_convs(
+            ds_factors,
+            input_channels,
+            num_layers=len(ds_factors) - 1,
+            use_weight_norm=use_weight_norm,
+            use_antialiasing=use_antialiasing,
+        )
+
+        if self.extra_conv_block:
+            self.ds_modules.append(
+                ConvBlock(
+                    c * 2 ** len(ds_factors),
+                    act_type=act_type,
+                    use_weight_norm=use_weight_norm,
+                )
+            )
+            self.st_convs.append(None)
+
+        oc = input_channels * 2 ** len(ds_factors)  # number of output channels
+
+        self.seq_model = seq_model
+        if seq_model == "gru":
+            self.gru = torch.nn.GRU(
+                oc,
+                oc // 2,
+                num_layers=2,
+                bidirectional=True,
+                batch_first=True,
+            )
+            self.conv_block1 = ConvBlock(
+                oc, act_type=act_type, use_weight_norm=use_weight_norm
+            )
+            self.conv_block2 = ConvBlock(
+                oc, act_type=act_type, use_weight_norm=use_weight_norm
+            )
+        else:
+            raise ValueError("Values for 'seq_model' can be gru|attention")
+
+    def forward(self, x, x_mel):
+        outputs = []
+        lengths = []
+        for idx, ds in enumerate(self.ds_modules):
+            lengths.append(x.shape[-1])
+
+            x, res, _ = ds(x)
+
+            if self.st_convs[idx] is not None:
+                res = self.st_convs[idx](res)
+                outputs.append(res)
+        outputs.append(x)
+
+        norm_factor = 1.0 / math.sqrt(len(outputs) + 1)
+        out = x_mel
+        for o in outputs:
+            out = out + o
+        out = out * norm_factor
+
+        if self.seq_model == "gru":
+            out, *_ = self.conv_block1(out)
+            if self.with_gru_residual:
+                res = out
+            out, *_ = self.gru(out.transpose(-2, -1))
+            out = out.transpose(-2, -1)
+            if self.with_gru_residual:
+                out = (out + res) / math.sqrt(2)
+            out, *_ = self.conv_block2(out)
+        elif self.seq_model == "attention":
+            out = self.att(out)
+
+        return out, lengths[::-1]
+
+
+class ConditionerDecoder(torch.nn.Module):
+    def __init__(
+        self,
+        up_factors,
+        input_channels,
+        with_extra_conv_block=False,
+        act_type="prelu",
+        use_weight_norm=False,
+        use_antialiasing=False,
+    ):
+        super().__init__()
+        self.extra_conv_block = with_extra_conv_block
+
+        n_channels = [
+            input_channels * 2 ** (len(up_factors) - i - 1)
+            for i in range(len(up_factors))
+        ]
+        self.input_conv_block = ConvBlock(
+            n_channels[0] * 2, act_type=act_type, use_weight_norm=use_weight_norm
+        )
+        up_modules = [
+            ConvBlock(
+                c,
+                r,
+                "up",
+                act_type=act_type,
+                use_weight_norm=use_weight_norm,
+                antialiasing=use_antialiasing,
+            )
+            for c, r in zip(n_channels, up_factors)
+        ]
+        if self.extra_conv_block:
+            up_modules = [
+                ConvBlock(
+                    2 * n_channels[0],
+                    act_type=act_type,
+                    use_weight_norm=use_weight_norm,
+                )
+            ] + up_modules
+        self.up_modules = torch.nn.ModuleList(up_modules)
+
+    def forward(self, x, lengths):
+        conditions = []
+        x, *_ = self.input_conv_block(x)
+        for up, length in zip(self.up_modules, lengths):
+            x, _, cond = up(x, length=length)
+            conditions.append(cond)
+        return x, conditions
+
+
+class ConditionerNetwork(torch.nn.Module):
+    def __init__(
+        self,
+        fb_kernel_size=3,
+        rate_factors=[2, 4, 4, 5],
+        n_channels=32,
+        n_mels=80,
+        n_mel_oversample=4,
+        encoder_gru_residual=False,
+        extra_conv_block=False,
+        encoder_act_type="prelu",
+        decoder_act_type="prelu",
+        precoding=None,
+        input_channels=1,
+        # optional, if specified, an extra conv. layer is used as adapter
+        # for the output signal estimat y_est
+        output_channels=None,
+        use_weight_norm=False,
+        seq_model="gru",
+        use_antialiasing=False,
+    ):
+        super().__init__()
+        self.input_conv = cond_weight_norm(
+            torch.nn.Conv1d(
+                input_channels, n_channels, kernel_size=fb_kernel_size, padding="same"
+            ),
+            use=use_weight_norm,
+        )
+
+        if output_channels is not None:
+            self.output_conv = cond_weight_norm(
+                torch.nn.Conv1d(
+                    n_channels,
+                    output_channels,
+                    kernel_size=fb_kernel_size,
+                    padding="same",
+                ),
+                use=use_weight_norm,
+            )
+        else:
+            self.output_conv = None
+
+        total_ds = math.prod(rate_factors)
+        total_channels = 2 ** len(rate_factors) * n_channels
+        # self.input_mel = MelAdapter(
+        #     n_mels,
+        #     total_channels,
+        #     total_ds * input_channels,
+        #     n_mel_oversample,
+        #     use_weight_norm=use_weight_norm,
+        # )
+        
+        
+        
+        # self.input_mel = WavLMAdapter(
+        #     output_channels = total_channels,
+        #     ds_factor       = total_ds * input_channels,
+        #     sample_rate     = 16_000,            
+        #     oversample      = n_mel_oversample,
+        #     use_weight_norm = use_weight_norm,
+        # )
+        
+        
+        self.input_mel = WavLMDualAdapter(
+            output_channels = total_channels,
+            ds_factor       = total_ds * input_channels,
+            sample_rate     = 16_000,            
+            oversample      = n_mel_oversample,
+            use_weight_norm = use_weight_norm,
+        )
+        
+
+        self.encoder = ConditionerEncoder(
+            rate_factors,
+            n_channels,
+            with_gru_residual=encoder_gru_residual,
+            with_extra_conv_block=extra_conv_block,
+            act_type=encoder_act_type,
+            use_weight_norm=use_weight_norm,
+            seq_model=seq_model,
+            use_antialiasing=False,
+        )
+        self.decoder = ConditionerDecoder(
+            rate_factors[::-1],
+            n_channels,
+            with_extra_conv_block=extra_conv_block,
+            act_type=decoder_act_type,
+            use_weight_norm=use_weight_norm,
+            use_antialiasing=use_antialiasing,
+        )
+
+        self.precoding = instantiate(precoding, _recursive_=True) if precoding else None
+
+    def forward(self, x, x_wav=None, train=False):
+        n_samples = x.shape[-1]
+
+        if x_wav is None:
+            # this is used in case some type of transform is appled to
+            # x before input.
+            # This way, we can pass the original waveform
+            x_wav = x
+
+        x_mel = self.input_mel(x_wav)
+
+        if self.precoding:
+            x = self.precoding(x)  # do this after mel-spec comp
+
+        x = self.input_conv(x)
+        h, lengths = self.encoder(x, x_mel)  # latent representation
+
+        y_hat, conditions = self.decoder(h, lengths)
+
+        if self.output_conv is not None:
+            y_hat = self.output_conv(y_hat)
+
+        if self.precoding:
+            y_hat = self.precoding.inv(y_hat)
+
+        # adjust length and dimensions
+        y_hat = torch.nn.functional.pad(y_hat, (0, n_samples - y_hat.shape[-1]))
+
+        if train:
+            return conditions, y_hat, h
+        else:
+            return conditions
