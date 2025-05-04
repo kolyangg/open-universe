@@ -557,6 +557,155 @@ class Universe(pl.LightningModule):
 
         return sigma, time
 
+    # def compute_losses(
+    #     self,
+    #     mix,
+    #     target,
+    #     train=True,
+    #     time_sampling="time_uniform",
+    #     t_min=0.0,
+    #     t_max=1.0,
+    #     rng=None,
+    #     text = None, ## NEW WITH TEXT ENCODER ###
+    #     mask = None
+    # ):
+    #     mix_trans = self.transform(mix)
+    #     tgt_trans = self.transform(target)
+        
+    #     if mask is not None:
+    #         m = mask.unsqueeze(1)
+    #         mix     = mix * m
+    #         target  = target * m
+    #     # mix_trans  = self.transform(mix)      # REMOVED 03 MAY
+    #     # tgt_trans  = self.transform(target)   # REMOVED 03 MAY
+        
+
+    #     if self.with_noise_target:
+    #         noise = mix - target
+    #         target_aux = torch.cat((target, noise), dim=1)
+    #         target_aux_trans = torch.cat((tgt_trans, self.transform(noise)), dim=1)
+    #     else:
+    #         target_aux = target
+    #         target_aux_trans = tgt_trans
+
+    #     sigma, _ = self.sample_sigma(mix_trans, time_sampling, t_min, t_max, rng=rng)
+
+    #     # sample the noise and create the target
+    #     z = target.new_zeros(tgt_trans.shape).normal_(generator=rng)
+        
+    #     if mask is not None:
+    #         z = z * m
+        
+    #     ### NEW ADD 19 APR ###
+    #     z = target.new_zeros(tgt_trans.shape).normal_(generator=rng)
+    #     z = _apply_mask(z, mask)             # keep score loss OK
+    #     ### NEW ADD 19 APR ###
+        
+    #     x_t = tgt_trans + sigma[:, None, None] * z
+
+    #     # run computations
+    #     # cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True)
+        
+    #     if self.have_text:
+    #         # THIS LINE CHANGES - Store the result which now includes text_metrics
+    #         result = self.condition_model(mix_trans, x_wav=mix, text=text, train=True, mask = mask) ### 01 MAY: added mask
+    #         if len(result) == 4:  # With text metrics
+    #             cond, y_est, h_est, text_metrics = result
+    #             # Store metrics for later use in training_step
+    #             self.text_metrics = text_metrics
+                
+    #         elif len(result) == 5:  # With text metrics
+    #             cond, y_est, h_est, text_metrics1, text_metrics2 = result
+    #             # Store metrics for later use in training_step
+    #             self.text_metrics1 = text_metrics1
+    #             self.text_metrics2 = text_metrics2
+                
+    #         else:
+    #             print(len(result))
+    #             cond, y_est, h_est = result
+    #             self.text_metrics = {}
+    #     else:
+    #         # cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True, mask = mask) ### 01 MAY: added mask
+    #         cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True) ### 01 MAY: removed mask if no text (TBC)
+    #         self.text_metrics = {}
+
+
+    #     if self.detach_cond:
+    #         cond = [c.detach() for c in cond]
+
+    #     score = self.score_model(x_t, sigma, cond)
+
+    #     # compute losses
+    #     l_score = self.loss_score(sigma[..., None, None] * score, -z)
+    #     if mask is not None:
+    #         l_score = self.loss_score(sigma[...,None,None]*score*m, -z*m)
+    #     else:
+    #         l_score = self.loss_score(sigma[...,None,None]*score, -z)
+
+    #     # if train:
+    #     #     if self.losses_kwargs.weights.latent > 0.0 and h_est is not None:
+    #     #         mel_target = self.condition_model.input_mel.compute_mel_spec(target_aux)
+    #     #         mel_target = mel_target / torch.linalg.norm(
+    #     #             mel_target, dim=(-2, -1), keepdim=True
+    #     #         ).clamp(min=1e-5)
+    #     #         l_latent = self.loss_latent(h_est, mel_target)
+
+    #     ### NEW CHANGE 19 APR ###
+    #     if train:
+    #         if self.losses_kwargs.weights.latent > 0.0 and h_est is not None:
+    #             mel_target = self.condition_model.input_mel.compute_mel_spec(
+    #                 _apply_mask(target_aux, mask)
+    #             )                
+                
+    #             mel_target = mel_target / torch.linalg.norm(
+    #                 mel_target, dim=(-2, -1), keepdim=True
+    #             ).clamp(min=1e-5)
+    #             l_latent = self.loss_latent(h_est, mel_target)
+                
+    #             # down‑sample the mask to mel length once
+    #             mel_mask = _downsample_mask(mask, mel_target.shape[-1] * target.shape[-1] // mel_target.shape[-1])
+    #             h_est_m   = _apply_mask(h_est, mel_mask.squeeze(1))
+    #             mel_target= _apply_mask(mel_target, mel_mask.squeeze(1))
+    #             l_latent  = self.loss_latent(h_est_m, mel_target)
+    #     ### NEW CHANGE 19 APR ###
+        
+    #         else:
+    #             l_latent = l_score.new_zeros(1)
+
+    #         if self.losses_kwargs.weights.signal > 0.0:
+    #             l_signal = self.loss_signal(y_est, target_aux_trans)
+            
+    #         ### NEW CHANGE 19 APR ###
+    #         if self.losses_kwargs.weights.signal > 0.0:
+    #             y_est_m  = _apply_mask(y_est,  mask)
+    #             tgt_m    = _apply_mask(target_aux_trans, mask)
+    #             l_signal = self.loss_signal(y_est_m, tgt_m)            
+    #         ### NEW CHANGE 19 APR ###
+            
+    #         else:
+    #             l_signal = l_score.new_zeros(1)
+
+    #         loss = self.losses_kwargs.weights.score * l_score
+    #         if torch.isnan(l_score):
+    #             log.warn("Score loss is nan...")
+    #             breakpoint()
+
+    #         if not torch.isnan(l_signal):
+    #             loss = loss + self.losses_kwargs.weights.signal * l_signal
+    #         else:
+    #             log.warn("Signal loss is nan, skip for total loss")
+
+    #         if not torch.isnan(l_latent):
+    #             loss = loss + self.losses_kwargs.weights.latent * l_latent
+    #         else:
+    #             log.warn("Latent loss is nan, skip for total loss")
+
+    #         return loss, l_score, l_signal, l_latent
+    #     else:
+    #         return l_score
+    
+    ### COMPUTE LOSSES - OLD VERSION ###
+    
     def compute_losses(
         self,
         mix,
@@ -566,7 +715,6 @@ class Universe(pl.LightningModule):
         t_min=0.0,
         t_max=1.0,
         rng=None,
-        text = None, ## NEW WITH TEXT ENCODER ###
         mask = None
     ):
         mix_trans = self.transform(mix)
@@ -576,9 +724,7 @@ class Universe(pl.LightningModule):
             m = mask.unsqueeze(1)
             mix     = mix * m
             target  = target * m
-        # mix_trans  = self.transform(mix)      # REMOVED 03 MAY
-        # tgt_trans  = self.transform(target)   # REMOVED 03 MAY
-        
+            
 
         if self.with_noise_target:
             noise = mix - target
@@ -604,31 +750,7 @@ class Universe(pl.LightningModule):
         x_t = tgt_trans + sigma[:, None, None] * z
 
         # run computations
-        # cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True)
-        
-        if self.have_text:
-            # THIS LINE CHANGES - Store the result which now includes text_metrics
-            result = self.condition_model(mix_trans, x_wav=mix, text=text, train=True, mask = mask) ### 01 MAY: added mask
-            if len(result) == 4:  # With text metrics
-                cond, y_est, h_est, text_metrics = result
-                # Store metrics for later use in training_step
-                self.text_metrics = text_metrics
-                
-            elif len(result) == 5:  # With text metrics
-                cond, y_est, h_est, text_metrics1, text_metrics2 = result
-                # Store metrics for later use in training_step
-                self.text_metrics1 = text_metrics1
-                self.text_metrics2 = text_metrics2
-                
-            else:
-                print(len(result))
-                cond, y_est, h_est = result
-                self.text_metrics = {}
-        else:
-            # cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True, mask = mask) ### 01 MAY: added mask
-            cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True) ### 01 MAY: removed mask if no text (TBC)
-            self.text_metrics = {}
-
+        cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True)
 
         if self.detach_cond:
             cond = [c.detach() for c in cond]
@@ -637,6 +759,7 @@ class Universe(pl.LightningModule):
 
         # compute losses
         l_score = self.loss_score(sigma[..., None, None] * score, -z)
+        
         if mask is not None:
             l_score = self.loss_score(sigma[...,None,None]*score*m, -z*m)
         else:
@@ -649,7 +772,7 @@ class Universe(pl.LightningModule):
         #             mel_target, dim=(-2, -1), keepdim=True
         #         ).clamp(min=1e-5)
         #         l_latent = self.loss_latent(h_est, mel_target)
-
+        
         ### NEW CHANGE 19 APR ###
         if train:
             if self.losses_kwargs.weights.latent > 0.0 and h_est is not None:
@@ -668,20 +791,20 @@ class Universe(pl.LightningModule):
                 mel_target= _apply_mask(mel_target, mel_mask.squeeze(1))
                 l_latent  = self.loss_latent(h_est_m, mel_target)
         ### NEW CHANGE 19 APR ###
-        
+            
             else:
                 l_latent = l_score.new_zeros(1)
 
             if self.losses_kwargs.weights.signal > 0.0:
                 l_signal = self.loss_signal(y_est, target_aux_trans)
-            
+                
             ### NEW CHANGE 19 APR ###
             if self.losses_kwargs.weights.signal > 0.0:
                 y_est_m  = _apply_mask(y_est,  mask)
                 tgt_m    = _apply_mask(target_aux_trans, mask)
                 l_signal = self.loss_signal(y_est_m, tgt_m)            
             ### NEW CHANGE 19 APR ###
-            
+                
             else:
                 l_signal = l_score.new_zeros(1)
 
@@ -703,6 +826,8 @@ class Universe(pl.LightningModule):
             return loss, l_score, l_signal, l_latent
         else:
             return l_score
+
+    
 
     # -------------------------------------------------------------------
     #   TRAINING & VALIDATION - minimal text additions 
