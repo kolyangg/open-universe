@@ -221,7 +221,8 @@ from .mdn import MixtureDensityNetworkLoss
 
 
 # # # 04 May version - check vs original version
-from .condition_orig_masked import ConditionerNetwork 
+# from .condition_orig_masked import ConditionerNetwork 
+from .condition_01May_512_2x_map import ConditionerNetwork 
 # from .m_universe_gan_NS2_adj4_fix2 import UniverseGAN # fixing for no text case (LR scheduler)
 from .m_universe_gan_NS2_adj4_fix2_orig import UniverseGAN # fixing for no text case (LR scheduler)
 # from .universe_gan_NS_orig import UniverseGAN
