@@ -257,6 +257,213 @@ class Universe(pl.LightningModule):
     # -------------------------------------------------------------------
     #   ENHANCE method: minimal addition to pass optional text
     # -------------------------------------------------------------------
+    # def enhance(
+    #     self,
+    #     mix,
+    #     n_steps: Optional[int] = None,
+    #     epsilon: Optional[float] = None,
+    #     target: Optional[torch.Tensor] = None,
+    #     fake_score_snr: Optional[float] = None,
+    #     rng: Optional[torch.Generator] = None,
+    #     use_aux_signal: Optional[bool] = False,
+    #     keep_rms: Optional[bool] = False,
+    #     ensemble: Optional[int] = None,
+    #     ensemble_stat: Optional[str] = "median",
+    #     warm_start: Optional[int] = None,
+    #     text: Optional[torch.Tensor] = None,  # <--- ADDED for text
+    #     mask: Optional[torch.Tensor] = None,  # ← NEW
+    # ) -> torch.Tensor:
+    #     """
+    #     If text is provided, we call condition_model with text. If not, old path.
+    #     """
+    #     if epsilon is None:
+    #         epsilon = self.diff_kwargs.epsilon
+    #     if n_steps is None:
+    #         n_steps = self.diff_kwargs.n_steps
+
+    #     x_ndim = mix.ndim
+        
+    #     if mask is not None:
+    #         mix = mix * mask.unsqueeze(1)          # zero padded region
+    #     x_ndim = mix.ndim
+        
+        
+    #     if x_ndim == 1:
+    #         mix = mix[None, None, :]
+    #     elif x_ndim == 2:
+    #         mix = mix[:, None, :]
+    #     elif x_ndim > 3:
+    #         raise ValueError("The input should have at most 3 dimensions")
+
+    #     mix_rms = mix.square().mean(dim=(-2, -1), keepdim=True).sqrt()
+
+    #     if ensemble is not None:
+    #         mix_shape = mix.shape
+    #         mix = torch.stack([mix] * ensemble, dim=0)
+    #         mix = mix.view((-1,) + mix_shape[1:])
+            
+    #         # ### ADD 01 MAY (MINOR) - NOT SURE IT'S NEEDED BASED ON ORIG VERSION
+    #         # if mask is not None:                           
+    #         #     mask = (torch.stack([mask] * ensemble, dim=0)
+    #         #             .view((-1, mask.shape[-1])))
+    #         # ### ADD 01 MAY (MINOR)
+
+    #     # pad to multiple of total downsampling to remove border effects
+    #     mix_len = mix.shape[-1]
+    #     mix, pad_ = self.pad(mix)
+    #     if target is not None:
+    #         target, _ = self.pad(target, pad=pad_)
+        
+        
+    #     # ### NEW 01 MAY - NOT SURE IT'S NEEDED BASED ON ORIG VERSION
+    #     # if mask is not None:
+    #     #     mask = torch.nn.functional.pad(
+    #     #         mask, (pad_ // 2, pad_ - pad_ // 2))     # NEW – keep the same length
+    #     # ### NEW 01 MAY
+        
+
+    #     (mix, target), *denorm_args = self.normalize_batch((mix, target))
+    #     mix_wav = mix
+    #     mix = self.transform(mix)
+    #     if target is not None:
+    #         self.transform(target)
+            
+    #     # we set this up here to test the diffusion with a "perfect" score model
+    #     if fake_score_snr is None: # we can test we some degraded score too
+    #         score_snr = 5.0
+    #     else:
+    #         score_snr = fake_score_snr
+
+    #     def score_wrapper(x, s, cond):
+    #         if target is None:
+    #             return self.score_model(x, s, cond)
+    #         else:
+    #             true_score = -(x - target) / s[:, None, None] ** 2
+    #             score_rms = (true_score**2).mean().sqrt()
+    #             noise_rms = score_rms * 10 ** (-score_snr / 20.0)
+    #             noise = torch.randn(
+    #                 true_score.shape,
+    #                 dtype=true_score.dtype,
+    #                 device=true_score.device,
+    #                 generator=rng,
+    #             )
+    #             return true_score + noise * noise_rms
+
+    #     # compute parameters
+    #     delta_t = 1.0 / (n_steps - 1)
+    #     gamma = (self.diff_kwargs.sigma_max / self.diff_kwargs.sigma_min) ** -delta_t
+    #     eta = 1 - gamma**epsilon
+    #     # beta = math.sqrt(1 - ((1 - eta) / gamma) ** 2)  # paper original
+    #     beta = math.sqrt(1 - gamma ** (2 * (epsilon - 1.0)))  # in terms of gamma only
+
+    #     # discretize time
+    #     time = torch.linspace(0, 1, n_steps).type_as(mix)
+    #     time = time.flip(dims=[0])
+    #     sigma = self.get_std_dev(time)
+    #     sigma = torch.broadcast_to(sigma[None, :], (mix.shape[0], sigma.shape[0]))
+
+    #     # -------------- 
+    #     # Condition
+    #     # -------------- 
+    #     # If text is provided, do new text path w/ debug prints; else old.
+    #     if text is not None:
+    #         # "new" approach
+    #         # We might do debug logs:
+    #         print(f"[DEBUG] 'enhance' sees text => using text in conditioner.")
+    #         result = self.condition_model(mix, x_wav=mix_wav, text=text, train=True, mask = mask) # 01 May add mask
+    #         if isinstance(result, tuple) and len(result) == 4:
+    #             cond, aux_signal, aux_latent, _ = result  # ignoring text_metrics
+    #         elif isinstance(result, tuple) and len(result) == 5:
+    #             cond, aux_signal, aux_latent, _, _ = result  # ignoring text_metrics
+    #         else:
+    #             cond, aux_signal, aux_latent = result
+    #     else:
+    #         # old approach
+    #         # cond, aux_signal, aux_latent = self.condition_model(
+    #         #     mix, x_wav=mix_wav, train=True, mask = mask) # 01 May add mask
+            
+    #         cond, aux_signal, aux_latent = self.condition_model(
+    #             mix, x_wav=mix_wav, train=True) ### 04 MAY: removed mask if no text (TBC)
+            
+            
+
+    #     # x = None
+    #     if use_aux_signal:
+    #         x = self.aux_to_wav(aux_signal)
+    #     else:
+    #         # use diffusion
+
+    #         # initial value
+    #         if warm_start is None:
+    #             x = randn(mix, sigma[:, 0], rng=rng)
+    #             n_start = 0
+    #         else:
+    #             sig = self.aux_to_wav(aux_signal)
+    #             x = sig + randn(sig, sigma[:, warm_start], rng=rng)
+    #             n_start = warm_start
+
+    #         for n in range(n_start, n_steps - 1):
+    #             s_now = sigma[:, n]
+    #             s_next = sigma[:, n + 1]
+    #             score = score_wrapper(x, s_now, cond)
+    #             z = randn(x, s_next, rng=rng)
+    #             x = x + s_now[..., None, None] ** 2 * eta * score + beta * z
+
+    #         # final step
+    #         score = score_wrapper(x, sigma[:, -1], cond)
+    #         x = x + sigma[:, -1, None, None] ** 2 * score
+
+    #     # inverse transform
+    #     x = self.transform(x, inv=True)
+
+    #     # # remove the padding and restore signal scale
+    #     # x = self.unpad(x, pad_)
+    #     # x = torch.nn.functional.pad(x, (0, mix_len - x.shape[-1]))
+        
+    #     ### 01 MAY ADD
+    #     # remove the padding and restore signal scale
+    #     x = self.unpad(x, pad_)
+
+    #     # #### NOT SURE THIS IS NEEDED BASED ON ORIG VERSION
+    #     # if mask is not None and pad_ > 0:                       # ← NEW
+    #     #     mask = mask[..., pad_ // 2 : -(pad_ - pad_ // 2)]   # same crop
+    #     # #### NOT SURE THIS IS NEEDED BASED ON ORIG VERSION
+
+    #     x = torch.nn.functional.pad(x, (0, mix_len - x.shape[-1]))
+        
+    #      ### 01 MAY ADD
+         
+        
+    #     if mask is not None:                       # keep tail at 0
+    #         x = x * mask.unsqueeze(1)
+
+    #     if keep_rms:
+    #         x_rms = x.square().mean(dim=(-2, -1), keepdim=True).sqrt().clamp(min=1e-5)
+    #         x = x * (mix_rms / x_rms)
+
+    #     scale = x.abs().max(dim=-1, keepdim=True).values
+    #     x = torch.where(scale > 1.0, x / scale, x)
+
+    #     if ensemble is not None:
+    #         x = x.view((-1,) + mix_shape)
+    #         if ensemble_stat == "mean":
+    #             x = x.mean(dim=0)
+    #         elif ensemble_stat == "median":
+    #             x = x.median(dim=0).values
+    #         elif ensemble_stat == "signal_median":
+    #             x = utils.signal_median(x)
+    #         else:
+    #             raise NotImplementedError()
+
+    #     if x_ndim == 1:
+    #         x = x[0, 0]
+    #     elif x_ndim == 2:
+    #         x = x[:, 0, :]
+    #     return x
+    
+    
+    ### enhance - old ver
+    
     def enhance(
         self,
         mix,
@@ -270,14 +477,11 @@ class Universe(pl.LightningModule):
         ensemble: Optional[int] = None,
         ensemble_stat: Optional[str] = "median",
         warm_start: Optional[int] = None,
-        text: Optional[torch.Tensor] = None,  # <--- ADDED for text
         mask: Optional[torch.Tensor] = None,  # ← NEW
     ) -> torch.Tensor:
-        """
-        If text is provided, we call condition_model with text. If not, old path.
-        """
         if epsilon is None:
             epsilon = self.diff_kwargs.epsilon
+
         if n_steps is None:
             n_steps = self.diff_kwargs.n_steps
 
@@ -286,7 +490,6 @@ class Universe(pl.LightningModule):
         if mask is not None:
             mix = mix * mask.unsqueeze(1)          # zero padded region
         x_ndim = mix.ndim
-        
         
         if x_ndim == 1:
             mix = mix[None, None, :]
@@ -301,42 +504,28 @@ class Universe(pl.LightningModule):
             mix_shape = mix.shape
             mix = torch.stack([mix] * ensemble, dim=0)
             mix = mix.view((-1,) + mix_shape[1:])
-            
-            # ### ADD 01 MAY (MINOR) - NOT SURE IT'S NEEDED BASED ON ORIG VERSION
-            # if mask is not None:                           
-            #     mask = (torch.stack([mask] * ensemble, dim=0)
-            #             .view((-1, mask.shape[-1])))
-            # ### ADD 01 MAY (MINOR)
 
         # pad to multiple of total downsampling to remove border effects
         mix_len = mix.shape[-1]
-        mix, pad_ = self.pad(mix)
+        mix, pad = self.pad(mix)
         if target is not None:
-            target, _ = self.pad(target, pad=pad_)
-        
-        
-        # ### NEW 01 MAY - NOT SURE IT'S NEEDED BASED ON ORIG VERSION
-        # if mask is not None:
-        #     mask = torch.nn.functional.pad(
-        #         mask, (pad_ // 2, pad_ - pad_ // 2))     # NEW – keep the same length
-        # ### NEW 01 MAY
-        
+            target, _ = self.pad(target, pad=pad)
 
         (mix, target), *denorm_args = self.normalize_batch((mix, target))
         mix_wav = mix
         mix = self.transform(mix)
         if target is not None:
             self.transform(target)
-            
+
         # we set this up here to test the diffusion with a "perfect" score model
-        if fake_score_snr is None: # we can test we some degraded score too
-            score_snr = 5.0
+        if fake_score_snr is None:  # we can test we some degraded score too
+            score_snr = 5.0  # db
         else:
             score_snr = fake_score_snr
 
         def score_wrapper(x, s, cond):
             if target is None:
-                return self.score_model(x, s, cond)
+                score = self.score_model(x, s, cond)
             else:
                 true_score = -(x - target) / s[:, None, None] ** 2
                 score_rms = (true_score**2).mean().sqrt()
@@ -347,7 +536,8 @@ class Universe(pl.LightningModule):
                     device=true_score.device,
                     generator=rng,
                 )
-                return true_score + noise * noise_rms
+                score = true_score + noise * noise_rms
+            return score
 
         # compute parameters
         delta_t = 1.0 / (n_steps - 1)
@@ -362,34 +552,14 @@ class Universe(pl.LightningModule):
         sigma = self.get_std_dev(time)
         sigma = torch.broadcast_to(sigma[None, :], (mix.shape[0], sigma.shape[0]))
 
-        # -------------- 
-        # Condition
-        # -------------- 
-        # If text is provided, do new text path w/ debug prints; else old.
-        if text is not None:
-            # "new" approach
-            # We might do debug logs:
-            print(f"[DEBUG] 'enhance' sees text => using text in conditioner.")
-            result = self.condition_model(mix, x_wav=mix_wav, text=text, train=True, mask = mask) # 01 May add mask
-            if isinstance(result, tuple) and len(result) == 4:
-                cond, aux_signal, aux_latent, _ = result  # ignoring text_metrics
-            elif isinstance(result, tuple) and len(result) == 5:
-                cond, aux_signal, aux_latent, _, _ = result  # ignoring text_metrics
-            else:
-                cond, aux_signal, aux_latent = result
-        else:
-            # old approach
-            # cond, aux_signal, aux_latent = self.condition_model(
-            #     mix, x_wav=mix_wav, train=True, mask = mask) # 01 May add mask
-            
-            cond, aux_signal, aux_latent = self.condition_model(
-                mix, x_wav=mix_wav, train=True) ### 04 MAY: removed mask if no text (TBC)
-            
-            
-
-        # x = None
+        # conditioning
+        cond, aux_signal, aux_latent = self.condition_model(
+            mix, x_wav=mix_wav, train=True
+        )
         if use_aux_signal:
+            # use the signal conditioner output
             x = self.aux_to_wav(aux_signal)
+
         else:
             # use diffusion
 
@@ -402,6 +572,7 @@ class Universe(pl.LightningModule):
                 x = sig + randn(sig, sigma[:, warm_start], rng=rng)
                 n_start = warm_start
 
+            # diffusion steps
             for n in range(n_start, n_steps - 1):
                 s_now = sigma[:, n]
                 s_next = sigma[:, n + 1]
@@ -409,39 +580,26 @@ class Universe(pl.LightningModule):
                 z = randn(x, s_next, rng=rng)
                 x = x + s_now[..., None, None] ** 2 * eta * score + beta * z
 
-            # final step
+            # last step
             score = score_wrapper(x, sigma[:, -1], cond)
             x = x + sigma[:, -1, None, None] ** 2 * score
 
         # inverse transform
         x = self.transform(x, inv=True)
 
-        # # remove the padding and restore signal scale
-        # x = self.unpad(x, pad_)
-        # x = torch.nn.functional.pad(x, (0, mix_len - x.shape[-1]))
-        
-        ### 01 MAY ADD
         # remove the padding and restore signal scale
-        x = self.unpad(x, pad_)
-
-        # #### NOT SURE THIS IS NEEDED BASED ON ORIG VERSION
-        # if mask is not None and pad_ > 0:                       # ← NEW
-        #     mask = mask[..., pad_ // 2 : -(pad_ - pad_ // 2)]   # same crop
-        # #### NOT SURE THIS IS NEEDED BASED ON ORIG VERSION
-
+        x = self.unpad(x, pad)
         x = torch.nn.functional.pad(x, (0, mix_len - x.shape[-1]))
-        
-         ### 01 MAY ADD
-         
         
         if mask is not None:                       # keep tail at 0
             x = x * mask.unsqueeze(1)
+
 
         if keep_rms:
             x_rms = x.square().mean(dim=(-2, -1), keepdim=True).sqrt().clamp(min=1e-5)
             x = x * (mix_rms / x_rms)
 
-        scale = x.abs().max(dim=-1, keepdim=True).values
+        scale = abs(x).max(dim=-1, keepdim=True).values
         x = torch.where(scale > 1.0, x / scale, x)
 
         if ensemble is not None:
@@ -459,7 +617,9 @@ class Universe(pl.LightningModule):
             x = x[0, 0]
         elif x_ndim == 2:
             x = x[:, 0, :]
+
         return x
+    
 
     def forward(self, xt, sigma, cond):
         return self.score_model(xt, sigma, cond)
