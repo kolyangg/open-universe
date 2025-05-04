@@ -29,7 +29,7 @@ from .blocks import PReLU_Conv
 # from .universe_NS_try import Universe
 # from .universe_NS_orig import Universe
 
-from .m_universe_NS_adj3_fix_map_orig2 import Universe # try importing NEW Universe
+from .m_universe_NS_adj3_fix_map_orig2_val import Universe # try importing NEW Universe
 
 log = logging.getLogger(__name__)
 
