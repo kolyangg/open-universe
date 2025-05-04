@@ -228,7 +228,8 @@ class UniverseGAN(Universe):
         ##### FIX 03 MAY #####
         
         # --- keep *target_original* UN‑normalised (old behaviour) -------------
-        target_original = target_raw.clone()
+        # target_original = target_raw.clone()
+        target_original = target_raw #### FIX 04 MAY
 
         # normalise only mix & main target
         (mix, target), *stats = self.normalize_batch(
