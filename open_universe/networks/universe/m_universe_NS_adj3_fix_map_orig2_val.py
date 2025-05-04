@@ -257,213 +257,6 @@ class Universe(pl.LightningModule):
     # -------------------------------------------------------------------
     #   ENHANCE method: minimal addition to pass optional text
     # -------------------------------------------------------------------
-    # def enhance(
-    #     self,
-    #     mix,
-    #     n_steps: Optional[int] = None,
-    #     epsilon: Optional[float] = None,
-    #     target: Optional[torch.Tensor] = None,
-    #     fake_score_snr: Optional[float] = None,
-    #     rng: Optional[torch.Generator] = None,
-    #     use_aux_signal: Optional[bool] = False,
-    #     keep_rms: Optional[bool] = False,
-    #     ensemble: Optional[int] = None,
-    #     ensemble_stat: Optional[str] = "median",
-    #     warm_start: Optional[int] = None,
-    #     text: Optional[torch.Tensor] = None,  # <--- ADDED for text
-    #     mask: Optional[torch.Tensor] = None,  # ← NEW
-    # ) -> torch.Tensor:
-    #     """
-    #     If text is provided, we call condition_model with text. If not, old path.
-    #     """
-    #     if epsilon is None:
-    #         epsilon = self.diff_kwargs.epsilon
-    #     if n_steps is None:
-    #         n_steps = self.diff_kwargs.n_steps
-
-    #     x_ndim = mix.ndim
-        
-    #     if mask is not None:
-    #         mix = mix * mask.unsqueeze(1)          # zero padded region
-    #     x_ndim = mix.ndim
-        
-        
-    #     if x_ndim == 1:
-    #         mix = mix[None, None, :]
-    #     elif x_ndim == 2:
-    #         mix = mix[:, None, :]
-    #     elif x_ndim > 3:
-    #         raise ValueError("The input should have at most 3 dimensions")
-
-    #     mix_rms = mix.square().mean(dim=(-2, -1), keepdim=True).sqrt()
-
-    #     if ensemble is not None:
-    #         mix_shape = mix.shape
-    #         mix = torch.stack([mix] * ensemble, dim=0)
-    #         mix = mix.view((-1,) + mix_shape[1:])
-            
-    #         # ### ADD 01 MAY (MINOR) - NOT SURE IT'S NEEDED BASED ON ORIG VERSION
-    #         # if mask is not None:                           
-    #         #     mask = (torch.stack([mask] * ensemble, dim=0)
-    #         #             .view((-1, mask.shape[-1])))
-    #         # ### ADD 01 MAY (MINOR)
-
-    #     # pad to multiple of total downsampling to remove border effects
-    #     mix_len = mix.shape[-1]
-    #     mix, pad_ = self.pad(mix)
-    #     if target is not None:
-    #         target, _ = self.pad(target, pad=pad_)
-        
-        
-    #     # ### NEW 01 MAY - NOT SURE IT'S NEEDED BASED ON ORIG VERSION
-    #     # if mask is not None:
-    #     #     mask = torch.nn.functional.pad(
-    #     #         mask, (pad_ // 2, pad_ - pad_ // 2))     # NEW – keep the same length
-    #     # ### NEW 01 MAY
-        
-
-    #     (mix, target), *denorm_args = self.normalize_batch((mix, target))
-    #     mix_wav = mix
-    #     mix = self.transform(mix)
-    #     if target is not None:
-    #         self.transform(target)
-            
-    #     # we set this up here to test the diffusion with a "perfect" score model
-    #     if fake_score_snr is None: # we can test we some degraded score too
-    #         score_snr = 5.0
-    #     else:
-    #         score_snr = fake_score_snr
-
-    #     def score_wrapper(x, s, cond):
-    #         if target is None:
-    #             return self.score_model(x, s, cond)
-    #         else:
-    #             true_score = -(x - target) / s[:, None, None] ** 2
-    #             score_rms = (true_score**2).mean().sqrt()
-    #             noise_rms = score_rms * 10 ** (-score_snr / 20.0)
-    #             noise = torch.randn(
-    #                 true_score.shape,
-    #                 dtype=true_score.dtype,
-    #                 device=true_score.device,
-    #                 generator=rng,
-    #             )
-    #             return true_score + noise * noise_rms
-
-    #     # compute parameters
-    #     delta_t = 1.0 / (n_steps - 1)
-    #     gamma = (self.diff_kwargs.sigma_max / self.diff_kwargs.sigma_min) ** -delta_t
-    #     eta = 1 - gamma**epsilon
-    #     # beta = math.sqrt(1 - ((1 - eta) / gamma) ** 2)  # paper original
-    #     beta = math.sqrt(1 - gamma ** (2 * (epsilon - 1.0)))  # in terms of gamma only
-
-    #     # discretize time
-    #     time = torch.linspace(0, 1, n_steps).type_as(mix)
-    #     time = time.flip(dims=[0])
-    #     sigma = self.get_std_dev(time)
-    #     sigma = torch.broadcast_to(sigma[None, :], (mix.shape[0], sigma.shape[0]))
-
-    #     # -------------- 
-    #     # Condition
-    #     # -------------- 
-    #     # If text is provided, do new text path w/ debug prints; else old.
-    #     if text is not None:
-    #         # "new" approach
-    #         # We might do debug logs:
-    #         print(f"[DEBUG] 'enhance' sees text => using text in conditioner.")
-    #         result = self.condition_model(mix, x_wav=mix_wav, text=text, train=True, mask = mask) # 01 May add mask
-    #         if isinstance(result, tuple) and len(result) == 4:
-    #             cond, aux_signal, aux_latent, _ = result  # ignoring text_metrics
-    #         elif isinstance(result, tuple) and len(result) == 5:
-    #             cond, aux_signal, aux_latent, _, _ = result  # ignoring text_metrics
-    #         else:
-    #             cond, aux_signal, aux_latent = result
-    #     else:
-    #         # old approach
-    #         # cond, aux_signal, aux_latent = self.condition_model(
-    #         #     mix, x_wav=mix_wav, train=True, mask = mask) # 01 May add mask
-            
-    #         cond, aux_signal, aux_latent = self.condition_model(
-    #             mix, x_wav=mix_wav, train=True) ### 04 MAY: removed mask if no text (TBC)
-            
-            
-
-    #     # x = None
-    #     if use_aux_signal:
-    #         x = self.aux_to_wav(aux_signal)
-    #     else:
-    #         # use diffusion
-
-    #         # initial value
-    #         if warm_start is None:
-    #             x = randn(mix, sigma[:, 0], rng=rng)
-    #             n_start = 0
-    #         else:
-    #             sig = self.aux_to_wav(aux_signal)
-    #             x = sig + randn(sig, sigma[:, warm_start], rng=rng)
-    #             n_start = warm_start
-
-    #         for n in range(n_start, n_steps - 1):
-    #             s_now = sigma[:, n]
-    #             s_next = sigma[:, n + 1]
-    #             score = score_wrapper(x, s_now, cond)
-    #             z = randn(x, s_next, rng=rng)
-    #             x = x + s_now[..., None, None] ** 2 * eta * score + beta * z
-
-    #         # final step
-    #         score = score_wrapper(x, sigma[:, -1], cond)
-    #         x = x + sigma[:, -1, None, None] ** 2 * score
-
-    #     # inverse transform
-    #     x = self.transform(x, inv=True)
-
-    #     # # remove the padding and restore signal scale
-    #     # x = self.unpad(x, pad_)
-    #     # x = torch.nn.functional.pad(x, (0, mix_len - x.shape[-1]))
-        
-    #     ### 01 MAY ADD
-    #     # remove the padding and restore signal scale
-    #     x = self.unpad(x, pad_)
-
-    #     # #### NOT SURE THIS IS NEEDED BASED ON ORIG VERSION
-    #     # if mask is not None and pad_ > 0:                       # ← NEW
-    #     #     mask = mask[..., pad_ // 2 : -(pad_ - pad_ // 2)]   # same crop
-    #     # #### NOT SURE THIS IS NEEDED BASED ON ORIG VERSION
-
-    #     x = torch.nn.functional.pad(x, (0, mix_len - x.shape[-1]))
-        
-    #      ### 01 MAY ADD
-         
-        
-    #     if mask is not None:                       # keep tail at 0
-    #         x = x * mask.unsqueeze(1)
-
-    #     if keep_rms:
-    #         x_rms = x.square().mean(dim=(-2, -1), keepdim=True).sqrt().clamp(min=1e-5)
-    #         x = x * (mix_rms / x_rms)
-
-    #     scale = x.abs().max(dim=-1, keepdim=True).values
-    #     x = torch.where(scale > 1.0, x / scale, x)
-
-    #     if ensemble is not None:
-    #         x = x.view((-1,) + mix_shape)
-    #         if ensemble_stat == "mean":
-    #             x = x.mean(dim=0)
-    #         elif ensemble_stat == "median":
-    #             x = x.median(dim=0).values
-    #         elif ensemble_stat == "signal_median":
-    #             x = utils.signal_median(x)
-    #         else:
-    #             raise NotImplementedError()
-
-    #     if x_ndim == 1:
-    #         x = x[0, 0]
-    #     elif x_ndim == 2:
-    #         x = x[:, 0, :]
-    #     return x
-    
-    
-    ### enhance - old ver
-    
     def enhance(
         self,
         mix,
@@ -477,11 +270,14 @@ class Universe(pl.LightningModule):
         ensemble: Optional[int] = None,
         ensemble_stat: Optional[str] = "median",
         warm_start: Optional[int] = None,
+        text: Optional[torch.Tensor] = None,  # <--- ADDED for text
         mask: Optional[torch.Tensor] = None,  # ← NEW
     ) -> torch.Tensor:
+        """
+        If text is provided, we call condition_model with text. If not, old path.
+        """
         if epsilon is None:
             epsilon = self.diff_kwargs.epsilon
-
         if n_steps is None:
             n_steps = self.diff_kwargs.n_steps
 
@@ -490,6 +286,7 @@ class Universe(pl.LightningModule):
         if mask is not None:
             mix = mix * mask.unsqueeze(1)          # zero padded region
         x_ndim = mix.ndim
+        
         
         if x_ndim == 1:
             mix = mix[None, None, :]
@@ -504,28 +301,42 @@ class Universe(pl.LightningModule):
             mix_shape = mix.shape
             mix = torch.stack([mix] * ensemble, dim=0)
             mix = mix.view((-1,) + mix_shape[1:])
+            
+            # ### ADD 01 MAY (MINOR) - NOT SURE IT'S NEEDED BASED ON ORIG VERSION
+            # if mask is not None:                           
+            #     mask = (torch.stack([mask] * ensemble, dim=0)
+            #             .view((-1, mask.shape[-1])))
+            # ### ADD 01 MAY (MINOR)
 
         # pad to multiple of total downsampling to remove border effects
         mix_len = mix.shape[-1]
-        mix, pad = self.pad(mix)
+        mix, pad_ = self.pad(mix)
         if target is not None:
-            target, _ = self.pad(target, pad=pad)
+            target, _ = self.pad(target, pad=pad_)
+        
+        
+        # ### NEW 01 MAY - NOT SURE IT'S NEEDED BASED ON ORIG VERSION
+        # if mask is not None:
+        #     mask = torch.nn.functional.pad(
+        #         mask, (pad_ // 2, pad_ - pad_ // 2))     # NEW – keep the same length
+        # ### NEW 01 MAY
+        
 
         (mix, target), *denorm_args = self.normalize_batch((mix, target))
         mix_wav = mix
         mix = self.transform(mix)
         if target is not None:
             self.transform(target)
-
+            
         # we set this up here to test the diffusion with a "perfect" score model
-        if fake_score_snr is None:  # we can test we some degraded score too
-            score_snr = 5.0  # db
+        if fake_score_snr is None: # we can test we some degraded score too
+            score_snr = 5.0
         else:
             score_snr = fake_score_snr
 
         def score_wrapper(x, s, cond):
             if target is None:
-                score = self.score_model(x, s, cond)
+                return self.score_model(x, s, cond)
             else:
                 true_score = -(x - target) / s[:, None, None] ** 2
                 score_rms = (true_score**2).mean().sqrt()
@@ -536,8 +347,7 @@ class Universe(pl.LightningModule):
                     device=true_score.device,
                     generator=rng,
                 )
-                score = true_score + noise * noise_rms
-            return score
+                return true_score + noise * noise_rms
 
         # compute parameters
         delta_t = 1.0 / (n_steps - 1)
@@ -552,14 +362,34 @@ class Universe(pl.LightningModule):
         sigma = self.get_std_dev(time)
         sigma = torch.broadcast_to(sigma[None, :], (mix.shape[0], sigma.shape[0]))
 
-        # conditioning
-        cond, aux_signal, aux_latent = self.condition_model(
-            mix, x_wav=mix_wav, train=True
-        )
-        if use_aux_signal:
-            # use the signal conditioner output
-            x = self.aux_to_wav(aux_signal)
+        # -------------- 
+        # Condition
+        # -------------- 
+        # If text is provided, do new text path w/ debug prints; else old.
+        if text is not None:
+            # "new" approach
+            # We might do debug logs:
+            print(f"[DEBUG] 'enhance' sees text => using text in conditioner.")
+            result = self.condition_model(mix, x_wav=mix_wav, text=text, train=True, mask = mask) # 01 May add mask
+            if isinstance(result, tuple) and len(result) == 4:
+                cond, aux_signal, aux_latent, _ = result  # ignoring text_metrics
+            elif isinstance(result, tuple) and len(result) == 5:
+                cond, aux_signal, aux_latent, _, _ = result  # ignoring text_metrics
+            else:
+                cond, aux_signal, aux_latent = result
+        else:
+            # old approach
+            # cond, aux_signal, aux_latent = self.condition_model(
+            #     mix, x_wav=mix_wav, train=True, mask = mask) # 01 May add mask
+            
+            cond, aux_signal, aux_latent = self.condition_model(
+                mix, x_wav=mix_wav, train=True) ### 04 MAY: removed mask if no text (TBC)
+            
+            
 
+        # x = None
+        if use_aux_signal:
+            x = self.aux_to_wav(aux_signal)
         else:
             # use diffusion
 
@@ -572,7 +402,6 @@ class Universe(pl.LightningModule):
                 x = sig + randn(sig, sigma[:, warm_start], rng=rng)
                 n_start = warm_start
 
-            # diffusion steps
             for n in range(n_start, n_steps - 1):
                 s_now = sigma[:, n]
                 s_next = sigma[:, n + 1]
@@ -580,26 +409,39 @@ class Universe(pl.LightningModule):
                 z = randn(x, s_next, rng=rng)
                 x = x + s_now[..., None, None] ** 2 * eta * score + beta * z
 
-            # last step
+            # final step
             score = score_wrapper(x, sigma[:, -1], cond)
             x = x + sigma[:, -1, None, None] ** 2 * score
 
         # inverse transform
         x = self.transform(x, inv=True)
 
+        # # remove the padding and restore signal scale
+        # x = self.unpad(x, pad_)
+        # x = torch.nn.functional.pad(x, (0, mix_len - x.shape[-1]))
+        
+        ### 01 MAY ADD
         # remove the padding and restore signal scale
-        x = self.unpad(x, pad)
+        x = self.unpad(x, pad_)
+
+        # #### NOT SURE THIS IS NEEDED BASED ON ORIG VERSION
+        # if mask is not None and pad_ > 0:                       # ← NEW
+        #     mask = mask[..., pad_ // 2 : -(pad_ - pad_ // 2)]   # same crop
+        # #### NOT SURE THIS IS NEEDED BASED ON ORIG VERSION
+
         x = torch.nn.functional.pad(x, (0, mix_len - x.shape[-1]))
+        
+         ### 01 MAY ADD
+         
         
         if mask is not None:                       # keep tail at 0
             x = x * mask.unsqueeze(1)
-
 
         if keep_rms:
             x_rms = x.square().mean(dim=(-2, -1), keepdim=True).sqrt().clamp(min=1e-5)
             x = x * (mix_rms / x_rms)
 
-        scale = abs(x).max(dim=-1, keepdim=True).values
+        scale = x.abs().max(dim=-1, keepdim=True).values
         x = torch.where(scale > 1.0, x / scale, x)
 
         if ensemble is not None:
@@ -617,8 +459,166 @@ class Universe(pl.LightningModule):
             x = x[0, 0]
         elif x_ndim == 2:
             x = x[:, 0, :]
-
         return x
+    
+    
+    ### enhance - old ver
+    
+    # def enhance(
+    #     self,
+    #     mix,
+    #     n_steps: Optional[int] = None,
+    #     epsilon: Optional[float] = None,
+    #     target: Optional[torch.Tensor] = None,
+    #     fake_score_snr: Optional[float] = None,
+    #     rng: Optional[torch.Generator] = None,
+    #     use_aux_signal: Optional[bool] = False,
+    #     keep_rms: Optional[bool] = False,
+    #     ensemble: Optional[int] = None,
+    #     ensemble_stat: Optional[str] = "median",
+    #     warm_start: Optional[int] = None,
+    #     mask: Optional[torch.Tensor] = None,  # ← NEW
+    # ) -> torch.Tensor:
+    #     if epsilon is None:
+    #         epsilon = self.diff_kwargs.epsilon
+
+    #     if n_steps is None:
+    #         n_steps = self.diff_kwargs.n_steps
+
+    #     x_ndim = mix.ndim
+        
+    #     if mask is not None:
+    #         mix = mix * mask.unsqueeze(1)          # zero padded region
+    #     x_ndim = mix.ndim
+        
+    #     if x_ndim == 1:
+    #         mix = mix[None, None, :]
+    #     elif x_ndim == 2:
+    #         mix = mix[:, None, :]
+    #     elif x_ndim > 3:
+    #         raise ValueError("The input should have at most 3 dimensions")
+
+    #     mix_rms = mix.square().mean(dim=(-2, -1), keepdim=True).sqrt()
+
+    #     if ensemble is not None:
+    #         mix_shape = mix.shape
+    #         mix = torch.stack([mix] * ensemble, dim=0)
+    #         mix = mix.view((-1,) + mix_shape[1:])
+
+    #     # pad to multiple of total downsampling to remove border effects
+    #     mix_len = mix.shape[-1]
+    #     mix, pad = self.pad(mix)
+    #     if target is not None:
+    #         target, _ = self.pad(target, pad=pad)
+
+    #     (mix, target), *denorm_args = self.normalize_batch((mix, target))
+    #     mix_wav = mix
+    #     mix = self.transform(mix)
+    #     if target is not None:
+    #         self.transform(target)
+
+    #     # we set this up here to test the diffusion with a "perfect" score model
+    #     if fake_score_snr is None:  # we can test we some degraded score too
+    #         score_snr = 5.0  # db
+    #     else:
+    #         score_snr = fake_score_snr
+
+    #     def score_wrapper(x, s, cond):
+    #         if target is None:
+    #             score = self.score_model(x, s, cond)
+    #         else:
+    #             true_score = -(x - target) / s[:, None, None] ** 2
+    #             score_rms = (true_score**2).mean().sqrt()
+    #             noise_rms = score_rms * 10 ** (-score_snr / 20.0)
+    #             noise = torch.randn(
+    #                 true_score.shape,
+    #                 dtype=true_score.dtype,
+    #                 device=true_score.device,
+    #                 generator=rng,
+    #             )
+    #             score = true_score + noise * noise_rms
+    #         return score
+
+    #     # compute parameters
+    #     delta_t = 1.0 / (n_steps - 1)
+    #     gamma = (self.diff_kwargs.sigma_max / self.diff_kwargs.sigma_min) ** -delta_t
+    #     eta = 1 - gamma**epsilon
+    #     # beta = math.sqrt(1 - ((1 - eta) / gamma) ** 2)  # paper original
+    #     beta = math.sqrt(1 - gamma ** (2 * (epsilon - 1.0)))  # in terms of gamma only
+
+    #     # discretize time
+    #     time = torch.linspace(0, 1, n_steps).type_as(mix)
+    #     time = time.flip(dims=[0])
+    #     sigma = self.get_std_dev(time)
+    #     sigma = torch.broadcast_to(sigma[None, :], (mix.shape[0], sigma.shape[0]))
+
+    #     # conditioning
+    #     cond, aux_signal, aux_latent = self.condition_model(
+    #         mix, x_wav=mix_wav, train=True
+    #     )
+    #     if use_aux_signal:
+    #         # use the signal conditioner output
+    #         x = self.aux_to_wav(aux_signal)
+
+    #     else:
+    #         # use diffusion
+
+    #         # initial value
+    #         if warm_start is None:
+    #             x = randn(mix, sigma[:, 0], rng=rng)
+    #             n_start = 0
+    #         else:
+    #             sig = self.aux_to_wav(aux_signal)
+    #             x = sig + randn(sig, sigma[:, warm_start], rng=rng)
+    #             n_start = warm_start
+
+    #         # diffusion steps
+    #         for n in range(n_start, n_steps - 1):
+    #             s_now = sigma[:, n]
+    #             s_next = sigma[:, n + 1]
+    #             score = score_wrapper(x, s_now, cond)
+    #             z = randn(x, s_next, rng=rng)
+    #             x = x + s_now[..., None, None] ** 2 * eta * score + beta * z
+
+    #         # last step
+    #         score = score_wrapper(x, sigma[:, -1], cond)
+    #         x = x + sigma[:, -1, None, None] ** 2 * score
+
+    #     # inverse transform
+    #     x = self.transform(x, inv=True)
+
+    #     # remove the padding and restore signal scale
+    #     x = self.unpad(x, pad)
+    #     x = torch.nn.functional.pad(x, (0, mix_len - x.shape[-1]))
+        
+    #     if mask is not None:                       # keep tail at 0
+    #         x = x * mask.unsqueeze(1)
+
+
+    #     if keep_rms:
+    #         x_rms = x.square().mean(dim=(-2, -1), keepdim=True).sqrt().clamp(min=1e-5)
+    #         x = x * (mix_rms / x_rms)
+
+    #     scale = abs(x).max(dim=-1, keepdim=True).values
+    #     x = torch.where(scale > 1.0, x / scale, x)
+
+    #     if ensemble is not None:
+    #         x = x.view((-1,) + mix_shape)
+    #         if ensemble_stat == "mean":
+    #             x = x.mean(dim=0)
+    #         elif ensemble_stat == "median":
+    #             x = x.median(dim=0).values
+    #         elif ensemble_stat == "signal_median":
+    #             x = utils.signal_median(x)
+    #         else:
+    #             raise NotImplementedError()
+
+    #     if x_ndim == 1:
+    #         x = x[0, 0]
+    #     elif x_ndim == 2:
+    #         x = x[:, 0, :]
+
+    #     return x
     
 
     def forward(self, xt, sigma, cond):
@@ -717,155 +717,6 @@ class Universe(pl.LightningModule):
 
         return sigma, time
 
-    # def compute_losses(
-    #     self,
-    #     mix,
-    #     target,
-    #     train=True,
-    #     time_sampling="time_uniform",
-    #     t_min=0.0,
-    #     t_max=1.0,
-    #     rng=None,
-    #     text = None, ## NEW WITH TEXT ENCODER ###
-    #     mask = None
-    # ):
-    #     mix_trans = self.transform(mix)
-    #     tgt_trans = self.transform(target)
-        
-    #     if mask is not None:
-    #         m = mask.unsqueeze(1)
-    #         mix     = mix * m
-    #         target  = target * m
-    #     # mix_trans  = self.transform(mix)      # REMOVED 03 MAY
-    #     # tgt_trans  = self.transform(target)   # REMOVED 03 MAY
-        
-
-    #     if self.with_noise_target:
-    #         noise = mix - target
-    #         target_aux = torch.cat((target, noise), dim=1)
-    #         target_aux_trans = torch.cat((tgt_trans, self.transform(noise)), dim=1)
-    #     else:
-    #         target_aux = target
-    #         target_aux_trans = tgt_trans
-
-    #     sigma, _ = self.sample_sigma(mix_trans, time_sampling, t_min, t_max, rng=rng)
-
-    #     # sample the noise and create the target
-    #     z = target.new_zeros(tgt_trans.shape).normal_(generator=rng)
-        
-    #     if mask is not None:
-    #         z = z * m
-        
-    #     ### NEW ADD 19 APR ###
-    #     z = target.new_zeros(tgt_trans.shape).normal_(generator=rng)
-    #     z = _apply_mask(z, mask)             # keep score loss OK
-    #     ### NEW ADD 19 APR ###
-        
-    #     x_t = tgt_trans + sigma[:, None, None] * z
-
-    #     # run computations
-    #     # cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True)
-        
-    #     if self.have_text:
-    #         # THIS LINE CHANGES - Store the result which now includes text_metrics
-    #         result = self.condition_model(mix_trans, x_wav=mix, text=text, train=True, mask = mask) ### 01 MAY: added mask
-    #         if len(result) == 4:  # With text metrics
-    #             cond, y_est, h_est, text_metrics = result
-    #             # Store metrics for later use in training_step
-    #             self.text_metrics = text_metrics
-                
-    #         elif len(result) == 5:  # With text metrics
-    #             cond, y_est, h_est, text_metrics1, text_metrics2 = result
-    #             # Store metrics for later use in training_step
-    #             self.text_metrics1 = text_metrics1
-    #             self.text_metrics2 = text_metrics2
-                
-    #         else:
-    #             print(len(result))
-    #             cond, y_est, h_est = result
-    #             self.text_metrics = {}
-    #     else:
-    #         # cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True, mask = mask) ### 01 MAY: added mask
-    #         cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True) ### 01 MAY: removed mask if no text (TBC)
-    #         self.text_metrics = {}
-
-
-    #     if self.detach_cond:
-    #         cond = [c.detach() for c in cond]
-
-    #     score = self.score_model(x_t, sigma, cond)
-
-    #     # compute losses
-    #     l_score = self.loss_score(sigma[..., None, None] * score, -z)
-    #     if mask is not None:
-    #         l_score = self.loss_score(sigma[...,None,None]*score*m, -z*m)
-    #     else:
-    #         l_score = self.loss_score(sigma[...,None,None]*score, -z)
-
-    #     # if train:
-    #     #     if self.losses_kwargs.weights.latent > 0.0 and h_est is not None:
-    #     #         mel_target = self.condition_model.input_mel.compute_mel_spec(target_aux)
-    #     #         mel_target = mel_target / torch.linalg.norm(
-    #     #             mel_target, dim=(-2, -1), keepdim=True
-    #     #         ).clamp(min=1e-5)
-    #     #         l_latent = self.loss_latent(h_est, mel_target)
-
-    #     ### NEW CHANGE 19 APR ###
-    #     if train:
-    #         if self.losses_kwargs.weights.latent > 0.0 and h_est is not None:
-    #             mel_target = self.condition_model.input_mel.compute_mel_spec(
-    #                 _apply_mask(target_aux, mask)
-    #             )                
-                
-    #             mel_target = mel_target / torch.linalg.norm(
-    #                 mel_target, dim=(-2, -1), keepdim=True
-    #             ).clamp(min=1e-5)
-    #             l_latent = self.loss_latent(h_est, mel_target)
-                
-    #             # down‑sample the mask to mel length once
-    #             mel_mask = _downsample_mask(mask, mel_target.shape[-1] * target.shape[-1] // mel_target.shape[-1])
-    #             h_est_m   = _apply_mask(h_est, mel_mask.squeeze(1))
-    #             mel_target= _apply_mask(mel_target, mel_mask.squeeze(1))
-    #             l_latent  = self.loss_latent(h_est_m, mel_target)
-    #     ### NEW CHANGE 19 APR ###
-        
-    #         else:
-    #             l_latent = l_score.new_zeros(1)
-
-    #         if self.losses_kwargs.weights.signal > 0.0:
-    #             l_signal = self.loss_signal(y_est, target_aux_trans)
-            
-    #         ### NEW CHANGE 19 APR ###
-    #         if self.losses_kwargs.weights.signal > 0.0:
-    #             y_est_m  = _apply_mask(y_est,  mask)
-    #             tgt_m    = _apply_mask(target_aux_trans, mask)
-    #             l_signal = self.loss_signal(y_est_m, tgt_m)            
-    #         ### NEW CHANGE 19 APR ###
-            
-    #         else:
-    #             l_signal = l_score.new_zeros(1)
-
-    #         loss = self.losses_kwargs.weights.score * l_score
-    #         if torch.isnan(l_score):
-    #             log.warn("Score loss is nan...")
-    #             breakpoint()
-
-    #         if not torch.isnan(l_signal):
-    #             loss = loss + self.losses_kwargs.weights.signal * l_signal
-    #         else:
-    #             log.warn("Signal loss is nan, skip for total loss")
-
-    #         if not torch.isnan(l_latent):
-    #             loss = loss + self.losses_kwargs.weights.latent * l_latent
-    #         else:
-    #             log.warn("Latent loss is nan, skip for total loss")
-
-    #         return loss, l_score, l_signal, l_latent
-    #     else:
-    #         return l_score
-    
-    ### COMPUTE LOSSES - OLD VERSION ###
-    
     def compute_losses(
         self,
         mix,
@@ -875,6 +726,7 @@ class Universe(pl.LightningModule):
         t_min=0.0,
         t_max=1.0,
         rng=None,
+        text = None, ## NEW WITH TEXT ENCODER ###
         mask = None
     ):
         mix_trans = self.transform(mix)
@@ -884,7 +736,9 @@ class Universe(pl.LightningModule):
             m = mask.unsqueeze(1)
             mix     = mix * m
             target  = target * m
-            
+        # mix_trans  = self.transform(mix)      # REMOVED 03 MAY
+        # tgt_trans  = self.transform(target)   # REMOVED 03 MAY
+        
 
         if self.with_noise_target:
             noise = mix - target
@@ -910,7 +764,31 @@ class Universe(pl.LightningModule):
         x_t = tgt_trans + sigma[:, None, None] * z
 
         # run computations
-        cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True)
+        # cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True)
+        
+        if self.have_text:
+            # THIS LINE CHANGES - Store the result which now includes text_metrics
+            result = self.condition_model(mix_trans, x_wav=mix, text=text, train=True, mask = mask) ### 01 MAY: added mask
+            if len(result) == 4:  # With text metrics
+                cond, y_est, h_est, text_metrics = result
+                # Store metrics for later use in training_step
+                self.text_metrics = text_metrics
+                
+            elif len(result) == 5:  # With text metrics
+                cond, y_est, h_est, text_metrics1, text_metrics2 = result
+                # Store metrics for later use in training_step
+                self.text_metrics1 = text_metrics1
+                self.text_metrics2 = text_metrics2
+                
+            else:
+                print(len(result))
+                cond, y_est, h_est = result
+                self.text_metrics = {}
+        else:
+            # cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True, mask = mask) ### 01 MAY: added mask
+            cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True) ### 01 MAY: removed mask if no text (TBC)
+            self.text_metrics = {}
+
 
         if self.detach_cond:
             cond = [c.detach() for c in cond]
@@ -919,7 +797,6 @@ class Universe(pl.LightningModule):
 
         # compute losses
         l_score = self.loss_score(sigma[..., None, None] * score, -z)
-        
         if mask is not None:
             l_score = self.loss_score(sigma[...,None,None]*score*m, -z*m)
         else:
@@ -932,7 +809,7 @@ class Universe(pl.LightningModule):
         #             mel_target, dim=(-2, -1), keepdim=True
         #         ).clamp(min=1e-5)
         #         l_latent = self.loss_latent(h_est, mel_target)
-        
+
         ### NEW CHANGE 19 APR ###
         if train:
             if self.losses_kwargs.weights.latent > 0.0 and h_est is not None:
@@ -951,20 +828,20 @@ class Universe(pl.LightningModule):
                 mel_target= _apply_mask(mel_target, mel_mask.squeeze(1))
                 l_latent  = self.loss_latent(h_est_m, mel_target)
         ### NEW CHANGE 19 APR ###
-            
+        
             else:
                 l_latent = l_score.new_zeros(1)
 
             if self.losses_kwargs.weights.signal > 0.0:
                 l_signal = self.loss_signal(y_est, target_aux_trans)
-                
+            
             ### NEW CHANGE 19 APR ###
             if self.losses_kwargs.weights.signal > 0.0:
                 y_est_m  = _apply_mask(y_est,  mask)
                 tgt_m    = _apply_mask(target_aux_trans, mask)
                 l_signal = self.loss_signal(y_est_m, tgt_m)            
             ### NEW CHANGE 19 APR ###
-                
+            
             else:
                 l_signal = l_score.new_zeros(1)
 
@@ -986,6 +863,129 @@ class Universe(pl.LightningModule):
             return loss, l_score, l_signal, l_latent
         else:
             return l_score
+    
+    ### COMPUTE LOSSES - OLD VERSION ###
+    
+    # def compute_losses(
+    #     self,
+    #     mix,
+    #     target,
+    #     train=True,
+    #     time_sampling="time_uniform",
+    #     t_min=0.0,
+    #     t_max=1.0,
+    #     rng=None,
+    #     mask = None
+    # ):
+    #     mix_trans = self.transform(mix)
+    #     tgt_trans = self.transform(target)
+        
+    #     if mask is not None:
+    #         m = mask.unsqueeze(1)
+    #         mix     = mix * m
+    #         target  = target * m
+            
+
+    #     if self.with_noise_target:
+    #         noise = mix - target
+    #         target_aux = torch.cat((target, noise), dim=1)
+    #         target_aux_trans = torch.cat((tgt_trans, self.transform(noise)), dim=1)
+    #     else:
+    #         target_aux = target
+    #         target_aux_trans = tgt_trans
+
+    #     sigma, _ = self.sample_sigma(mix_trans, time_sampling, t_min, t_max, rng=rng)
+
+    #     # sample the noise and create the target
+    #     z = target.new_zeros(tgt_trans.shape).normal_(generator=rng)
+        
+    #     if mask is not None:
+    #         z = z * m
+        
+    #     ### NEW ADD 19 APR ###
+    #     z = target.new_zeros(tgt_trans.shape).normal_(generator=rng)
+    #     z = _apply_mask(z, mask)             # keep score loss OK
+    #     ### NEW ADD 19 APR ###
+        
+    #     x_t = tgt_trans + sigma[:, None, None] * z
+
+    #     # run computations
+    #     cond, y_est, h_est = self.condition_model(mix_trans, x_wav=mix, train=True)
+
+    #     if self.detach_cond:
+    #         cond = [c.detach() for c in cond]
+
+    #     score = self.score_model(x_t, sigma, cond)
+
+    #     # compute losses
+    #     l_score = self.loss_score(sigma[..., None, None] * score, -z)
+        
+    #     if mask is not None:
+    #         l_score = self.loss_score(sigma[...,None,None]*score*m, -z*m)
+    #     else:
+    #         l_score = self.loss_score(sigma[...,None,None]*score, -z)
+
+    #     # if train:
+    #     #     if self.losses_kwargs.weights.latent > 0.0 and h_est is not None:
+    #     #         mel_target = self.condition_model.input_mel.compute_mel_spec(target_aux)
+    #     #         mel_target = mel_target / torch.linalg.norm(
+    #     #             mel_target, dim=(-2, -1), keepdim=True
+    #     #         ).clamp(min=1e-5)
+    #     #         l_latent = self.loss_latent(h_est, mel_target)
+        
+    #     ### NEW CHANGE 19 APR ###
+    #     if train:
+    #         if self.losses_kwargs.weights.latent > 0.0 and h_est is not None:
+    #             mel_target = self.condition_model.input_mel.compute_mel_spec(
+    #                 _apply_mask(target_aux, mask)
+    #             )                
+                
+    #             mel_target = mel_target / torch.linalg.norm(
+    #                 mel_target, dim=(-2, -1), keepdim=True
+    #             ).clamp(min=1e-5)
+    #             l_latent = self.loss_latent(h_est, mel_target)
+                
+    #             # down‑sample the mask to mel length once
+    #             mel_mask = _downsample_mask(mask, mel_target.shape[-1] * target.shape[-1] // mel_target.shape[-1])
+    #             h_est_m   = _apply_mask(h_est, mel_mask.squeeze(1))
+    #             mel_target= _apply_mask(mel_target, mel_mask.squeeze(1))
+    #             l_latent  = self.loss_latent(h_est_m, mel_target)
+    #     ### NEW CHANGE 19 APR ###
+            
+    #         else:
+    #             l_latent = l_score.new_zeros(1)
+
+    #         if self.losses_kwargs.weights.signal > 0.0:
+    #             l_signal = self.loss_signal(y_est, target_aux_trans)
+                
+    #         ### NEW CHANGE 19 APR ###
+    #         if self.losses_kwargs.weights.signal > 0.0:
+    #             y_est_m  = _apply_mask(y_est,  mask)
+    #             tgt_m    = _apply_mask(target_aux_trans, mask)
+    #             l_signal = self.loss_signal(y_est_m, tgt_m)            
+    #         ### NEW CHANGE 19 APR ###
+                
+    #         else:
+    #             l_signal = l_score.new_zeros(1)
+
+    #         loss = self.losses_kwargs.weights.score * l_score
+    #         if torch.isnan(l_score):
+    #             log.warn("Score loss is nan...")
+    #             breakpoint()
+
+    #         if not torch.isnan(l_signal):
+    #             loss = loss + self.losses_kwargs.weights.signal * l_signal
+    #         else:
+    #             log.warn("Signal loss is nan, skip for total loss")
+
+    #         if not torch.isnan(l_latent):
+    #             loss = loss + self.losses_kwargs.weights.latent * l_latent
+    #         else:
+    #             log.warn("Latent loss is nan, skip for total loss")
+
+    #         return loss, l_score, l_signal, l_latent
+    #     else:
+    #         return l_score
 
     
 
@@ -1104,355 +1104,95 @@ class Universe(pl.LightningModule):
         self.rng = torch.Generator(device=self.device)
         self.rng.manual_seed(682479040)
 
-    # def validation_step(self, batch, batch_idx, dataset_i=0):
-    #     """
-    #     If text is present in batch => use new path, else old path.
-    #     No difference to the old code for no-text scenario.
-    #     """
-    #     # detect text
-    #     # if len(batch) >= 3 and isinstance(batch[2], (str, list, torch.Tensor)):
-    #     #     self.have_text = True
-    #     #     mix_raw, target_raw, text = batch[:3]
-    #     # else: # same as in original
-    #     #     self.have_text = False
-    #     #     mix_raw, target_raw = batch[:2]
-            
-    #     # ------------------- unpack ---------------------
-    #     if len(batch) == 4:                       # mix, tgt, txt?, mask
-            
-    #         ### 04 MAY FIX ###
-    #         mix_raw, target_raw, text, mask = batch
-    #         # print(f"[DEBUG] validation_step sees text => {text}")
-
-    #         if text is None:
-    #             self.have_text = False
-
-    #         elif isinstance(text, str):
-    #             # any non‑whitespace chars?
-    #             self.have_text = bool(text.strip())
-
-    #         elif isinstance(text, (list, tuple)):
-    #             # at least one element that is a non‑empty string
-    #             self.have_text = any(
-    #                 isinstance(t, str) and t.strip() for t in text
-    #             )
-
-    #         elif isinstance(text, torch.Tensor):
-    #             # tensor with ≥1 element
-    #             self.have_text = text.numel() > 0
-
-    #         else:
-    #             self.have_text = False
-            
-    #         ### 04 MAY FIX ###
-                
-    #     elif len(batch) == 3 and isinstance(batch[2], (str, list, torch.Tensor)):
-    #         ### FIX 04 MAY ###
-    #         # mix_raw, target_raw, text = batch
-    #         # mask = None
-    #         # self.have_text = True
-            
-    #         self.have_text = False
-    #         mix_raw, target_raw, mask = batch[:3]
-    #         ### FIX 04 MAY ###
-            
-    #     else:                                     # legacy 2‑tuple
-    #         mix_raw, target_raw = batch[:2]
-    #         text, mask = None, None
-    #         self.have_text = False
-
-    #     # batch_scaled, *stats = self.normalize_batch((mix_raw, target_raw), norm=self.normalization_norm)
-    #     # mix, target = batch_scaled
-        
-    #     # ------------- apply mask BEFORE normalisation -----------
-    #     if mask is not None:
-    #         m = mask.unsqueeze(1)                 # [B,1,T]
-    #         mix_raw    = mix_raw    * m
-    #         target_raw = target_raw * m
-
-    #     batch_scaled, *stats = self.normalize_batch(
-    #         (mix_raw, target_raw), norm=self.normalization_norm
-    #     )
-    #     mix, target = batch_scaled
-        
-        
-    #     batch_size = mix.shape[0]
-
-    #     tb = torch.linspace(0.0, 1.0, self.val_kwargs.n_bins + 1, device=mix.device)
-    #     bin_scores = []
-    #     for i in range(self.val_kwargs.n_bins):
-    #         # ----------- pad mix, target *and* mask consistently ----------
-    #         mix_p,   pad_ = self.pad(mix)
-    #         target_p, _   = self.pad(target, pad=pad_)
-    #         if mask is not None:
-    #             mask_p = torch.nn.functional.pad(
-    #                 mask, (pad_ // 2, pad_ - pad_ // 2)
-    #             )
-    #         else:
-    #             mask_p = None
-
-    #         if self.have_text:
-    #             ls = self.compute_losses(
-    #                 mix_p[0],
-    #                 target_p[0],
-    #                 train=False,
-    #                 time_sampling="time_uniform", # always sample uniformly for validation
-    #                 t_min=tb[i],
-    #                 t_max=tb[i + 1],
-    #                 rng=self.rng,
-    #                 text=text, ## NEW WITH TEXT ENCODER ###
-    #                 mask=mask_p,
-    #             )
-    #         else: # same as in original
-    #             ls = self.compute_losses(
-    #                 mix_p[0],
-    #                 target_p[0],
-    #                 train=False,
-    #                 time_sampling="time_uniform", # always sample uniformly for validation
-    #                 t_min=tb[i],
-    #                 t_max=tb[i + 1],
-    #                 rng=self.rng,
-    #                 mask=mask_p,
-    #             )
-    #         bin_scores.append(ls)
-
-    #     self.val_score_bins = tb
-    #     self.val_score_values = torch.tensor(bin_scores, device=mix.device)
-    #     l_score = torch.mean(self.val_score_values)
-        
-    #     # compute the cumulative distribution
-    #     # manual cumsum to be deterministic
-    #     v = self.val_score_values.clamp(min=5e-4)
-    #     pr_cum = v.new_zeros(v.shape[0] + 1)
-    #     for idx, p in enumerate(v):
-    #         pr_cum[idx + 1] = pr_cum[idx] + p
-    #     pr_cum = pr_cum / pr_cum[-1]
-    #     pr_cum[-1] = 1.0 + 1e-5 # to include the last bound
-    #     self.pr_cum = pr_cum
-
-    #     self.log(
-    #         "val/score", l_score, on_epoch=True, sync_dist=True, batch_size=batch_size
-    #     )
-    #     for i in range(self.val_kwargs.n_bins):
-    #         self.log(
-    #             f"val/score_{tb[i]:.2f}-{tb[i+1]:.2f}",
-    #             bin_scores[i],
-    #             on_epoch=True,
-    #             sync_dist=True,
-    #             batch_size=batch_size,
-    #         )
-
-    #     # Validation enhancement losses
-    #     if self.trainer.testing or self.n_batches_est_done < self.val_kwargs.max_enh_batches:
-    #         self.n_batches_est_done += 1
-    #         # use unnormalized data for enhancement
-    #         # if self.have_text:
-    #         #     mix_, target_, text_ = batch[:3] 
-    #         #     # mix_, target_, text_ = batch # to check if it works (in line with original for non-text)
-    #         #     print(f"[VALIDATION DEBUG] Before enhance call, text available: {text is not None}")
-    #         #     print(f"[VALIDATION DEBUG] Text sample: {text[0] if text is not None else 'None'}")
-    #         #     est = self.enhance(mix_, rng=self.rng, text=text_)
-    #         # else:
-    #         #     # mix_, target_ = batch[:2]
-    #         #     mix_, target_ = batch # to check if it works (per original)
-    #         #     print(f"[VALIDATION DEBUG] Before enhance call, not using text")
-    #         #     est = self.enhance(mix_, rng=self.rng)
-            
-    #         # ------------- enhancement with mask --------------
-    #         if self.have_text:
-    #             mix_, target_, text_, mask_ = mix_raw, target_raw, text, mask
-    #             est = self.enhance(mix_, rng=self.rng, text=text_, mask=mask_)
-    #         else:
-    #             mix_, target_, mask_ = mix_raw, target_raw, mask
-    #             est = self.enhance(mix_, rng=self.rng, mask=mask_)
-
-    #         # zero‑out padding region in the estimate so metrics ignore it
-    #         if mask_ is not None:
-    #             est = est * mask_.unsqueeze(1)
-    #             target_ = target_ * mask_.unsqueeze(1)
-            
-    #         # Log validation text metrics
-    #         if self.have_text and hasattr(self, 'text_metrics') and self.text_metrics:
-    #             for k, v in self.text_metrics.items():
-    #                 if isinstance(v, (int, float)):
-    #                     self.log(f"val_text_checks/{k}", v, on_epoch=True, sync_dist=True, batch_size=batch_size)
-    #                 elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
-    #                     for i, pos in enumerate(v):
-    #                         self.log(f"val_text_checks/top_attended_{i}", pos, on_epoch=True, sync_dist=True, batch_size=batch_size)
-            
-    #         if self.have_text and hasattr(self, 'text_metrics1') and self.text_metrics1:
-    #             for k, v in self.text_metrics1.items():
-    #                 if isinstance(v, (int, float)):
-    #                     self.log(f"val_text_checks1/{k}", v, on_epoch=True, sync_dist=True, batch_size=batch_size)
-    #                 elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
-    #                     for i, pos in enumerate(v):
-    #                         self.log(f"val_text_checks1/top_attended_{i}", pos, on_epoch=True, sync_dist=True, batch_size=batch_size)
-            
-    #         if self.have_text and hasattr(self, 'text_metrics2') and self.text_metrics2:
-    #             for k, v in self.text_metrics2.items():
-    #                 if isinstance(v, (int, float)):
-    #                     self.log(f"val_text_checks2/{k}", v, on_epoch=True, sync_dist=True, batch_size=batch_size)
-    #                 elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
-    #                     for i, pos in enumerate(v):
-    #                         self.log(f"val_text_checks2/top_attended_{i}", pos, on_epoch=True, sync_dist=True, batch_size=batch_size)
-
-    #         # log val losses
-    #         for name, loss in self.enh_losses.items():
-    #             val_metric = loss(est, target_)
-    #             if not isinstance(val_metric, dict):
-    #                 val_metric = {"": val_metric}
-    #             for sub_name, loss_val in val_metric.items():
-    #                 self.log(
-    #                     f"{name}{sub_name}",
-    #                     loss_val.to(mix_.device),
-    #                     on_epoch=True,
-    #                     sync_dist=True,
-    #                     batch_size=batch_size,
-    #                 )
-
-    #         # optional code: wandb logs etc. 
-    #         # (unchanged from old code, just do the normal audio logging)
-            
-    #         # ✅ Save a few audio samples to Wandb (only in main process)
-    #         if self.trainer.is_global_zero and self.n_tb_samples_saved < self.num_tb_samples:
-    #             num_save = min(self.num_tb_samples - self.n_tb_samples_saved, batch_size)
-    #             audio_logs = {}
-
-    #             print(f"[DEBUG] Logging {num_save} audio samples to Wandb...")
-
-    #             for idx in range(num_save):
-    #                 sample_id = f"sample_{self.global_rank}_{self.n_tb_samples_saved}"
-
-    #                 # Debug print for sample info
-    #                 print(f"[DEBUG] Processing sample {sample_id}")
-
-    #                 # Normalize for logging
-    #                 mix_ = mix[idx] * 0.95 / torch.max(torch.abs(mix[idx]))
-    #                 mix_loud = torchaudio.functional.loudness(mix[idx], self.fs)
-
-    #                 # ✅ Convert tensor to NumPy and ensure correct dtype & shape
-    #                 mix_np = mix_.cpu().numpy().astype(np.float32)
-
-    #                 # Ensure the shape is (samples,)
-    #                 if mix_np.ndim == 2:
-    #                     mix_np = mix_np.reshape(-1)  # Convert from (1, samples) to (samples,)
-
-    #                 # print(f"[DEBUG] Input audio shape: {mix_np.shape}, dtype: {mix_np.dtype}, max: {mix_np.max()}, min: {mix_np.min()}")
-
-    #                 # Check for NaNs or Infs before logging
-    #                 if np.isnan(mix_np).any() or np.isinf(mix_np).any():
-    #                     print(f"[ERROR] Detected NaN or Inf values in input audio: {sample_id}")
-    #                     continue  # Skip this sample
-
-    #                 # Ensure a standard sample rate (e.g., 16kHz)
-    #                 sample_rate = 16000  # Change if needed
-
-    #                 # Log input audio
-    #                 audio_logs[f"audio/input_{sample_id}"] = wandb.Audio(
-    #                     mix_np, sample_rate=sample_rate, caption="Noisy Input"
-    #                 )
-
-    #                 if not self.first_val_done:
-    #                     # Save clean target the first time
-    #                     tgt_loud = torchaudio.functional.loudness(target[idx], self.fs)
-    #                     tgt_gain = 10 ** ((mix_loud - tgt_loud) / 20)
-
-    #                     target_np = (target[idx] * tgt_gain).cpu().numpy().astype(np.float32)
-    #                     if target_np.ndim == 2:
-    #                         target_np = target_np.reshape(-1)
-
-    #                     print(f"[DEBUG] Target audio shape: {target_np.shape}, dtype: {target_np.dtype}, max: {target_np.max()}, min: {target_np.min()}")
-
-    #                     if np.isnan(target_np).any() or np.isinf(target_np).any():
-    #                         print(f"[ERROR] Detected NaN or Inf values in target audio: {sample_id}")
-    #                         continue  # Skip this sample
-
-    #                     audio_logs[f"audio/target_{sample_id}"] = wandb.Audio(
-    #                         target_np, sample_rate=sample_rate, caption="Clean Target"
-    #                     )
-
-    #                 # Log enhanced output
-    #                 est_loud = torchaudio.functional.loudness(est[idx], self.fs)
-    #                 est_gain = 10 ** ((mix_loud - est_loud) / 20)
-
-    #                 est_np = (est[idx] * est_gain).cpu().numpy().astype(np.float32)
-    #                 if est_np.ndim == 2:
-    #                     est_np = est_np.reshape(-1)
-
-    #                 # print(f"[DEBUG] Output audio shape: {est_np.shape}, dtype: {est_np.dtype}, max: {est_np.max()}, min: {est_np.min()}")
-
-    #                 if np.isnan(est_np).any() or np.isinf(est_np).any():
-    #                     print(f"[ERROR] Detected NaN or Inf values in output audio: {sample_id}")
-    #                     continue  # Skip this sample
-
-    #                 audio_logs[f"audio/output_{sample_id}"] = wandb.Audio(
-    #                     est_np, sample_rate=sample_rate, caption="Enhanced Output"
-    #                 )
-
-    #                 # Update sample count
-    #                 self.n_tb_samples_saved += 1
-    #                 if self.n_tb_samples_saved >= self.num_tb_samples:
-    #                     print(f"[DEBUG] Reached num_tb_samples limit ({self.num_tb_samples}), stopping logging.")
-    #                     break
-
-    #             # ✅ Log all samples at once (efficient logging)
-    #             if audio_logs:
-    #                 print("[DEBUG] Sending audio logs to Wandb...")
-    #                 # self.logger.experiment.log(audio_logs, step=self.global_step)
-    #             else:
-    #                 print("[DEBUG] No audio logs found! Wandb log skipped.")
-                    
-                    
-    #             # >>> NEW 03 MAY  <<< — attention maps ---------------------------------
-    #             att_logs = {}
-    #             tc = getattr(self.condition_model, "text_conditioner", None)
-    #             att_map = getattr(tc, "last_attn_map", None)
-
-    #             if att_map is not None:
-    #                 attn = att_map.cpu().numpy()          # shape [B, Q, S]
-    #                 for k in range(num_save):
-    #                     fig, ax = plt.subplots(figsize=(5, 4))
-    #                     im = ax.imshow(attn[k], aspect="auto", origin="lower")
-    #                     ax.set_xlabel("Text tokens"); ax.set_ylabel("Mel frames")
-    #                     ax.set_title(f"Attn {self.global_step}_{k}")
-    #                     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-    #                     att_logs[f"attention/attn_{sample_id}_{k}"] = (
-    #                         wandb.Image(fig, caption=f"Cross‑Attention {sample_id}_{k}"))
-    #                     plt.close(fig)
-    #             else:
-    #                 print("[DEBUG] No attention map found in TextConditioner.")
-    #             # ----------------------------------------------------------------
-
-    #             # send everything together
-    #             payload = {**audio_logs, **att_logs}
-    #             if payload:
-    #                 self.logger.experiment.log(payload, step=self.global_step)
-                
-    #             # >>> NEW 03 MAY  <<< — attention maps ---------------------------------
-
-    #### VALIDATION STEP - OLD CODE
     def validation_step(self, batch, batch_idx, dataset_i=0):
-        # batch = batch[:2]
+        """
+        If text is present in batch => use new path, else old path.
+        No difference to the old code for no-text scenario.
+        """
+
+        # # ------------------- unpack ---------------------
+        # if len(batch) == 4:                       # mix, tgt, txt?, mask
+            
+        #     ### 04 MAY FIX ###
+        #     mix_raw, target_raw, text, mask = batch
+        #     # print(f"[DEBUG] validation_step sees text => {text}")
+
+        #     if text is None:
+        #         self.have_text = False
+
+        #     elif isinstance(text, str):
+        #         # any non‑whitespace chars?
+        #         self.have_text = bool(text.strip())
+
+        #     elif isinstance(text, (list, tuple)):
+        #         # at least one element that is a non‑empty string
+        #         self.have_text = any(
+        #             isinstance(t, str) and t.strip() for t in text
+        #         )
+
+        #     elif isinstance(text, torch.Tensor):
+        #         # tensor with ≥1 element
+        #         self.have_text = text.numel() > 0
+
+        #     else:
+        #         self.have_text = False
+            
+        #     ### 04 MAY FIX ###
+                
+        # elif len(batch) == 3 and isinstance(batch[2], (str, list, torch.Tensor)):
+        #     ### FIX 04 MAY ###
+        #     # mix_raw, target_raw, text = batch
+        #     # mask = None
+        #     # self.have_text = True
+            
+        #     self.have_text = False
+        #     mix_raw, target_raw, mask = batch[:3]
+        #     ### FIX 04 MAY ###
+            
+        # else:                                     # legacy 2‑tuple
+        #     mix_raw, target_raw = batch[:2]
+        #     text, mask = None, None
+        #     self.have_text = False
         
         batch = batch[:4]
         mix_raw, target_raw, text, mask = batch
+        
+        if text is not None:
+            if isinstance(text, str):
+                self.have_text = bool(text.strip())
+            elif isinstance(text, (list, tuple)):
+                self.have_text = any(
+                    isinstance(t, str) and t.strip() for t in text
+                )
+            elif isinstance(text, torch.Tensor):
+                self.have_text = text.numel() > 0
+            else:
+                self.have_text = False
+        
+        # print(f"[DEBUG] validation_step sees text => {text}")
+        # print(f"[DEBUG] self.have_text => {self.have_text}")
+
+        # batch_scaled, *stats = self.normalize_batch((mix_raw, target_raw), norm=self.normalization_norm)
+        # mix, target = batch_scaled
         
         # ------------- apply mask BEFORE normalisation -----------
         if mask is not None:
             m = mask.unsqueeze(1)                 # [B,1,T]
             mix_raw    = mix_raw    * m
             target_raw = target_raw * m
-        
 
-        # batch_scaled, *stats = self.normalize_batch(batch, norm=self.normalization_norm)
-        batch_scaled, *stats = self.normalize_batch((mix_raw, target_raw), norm=self.normalization_norm)
+        batch_scaled, *stats = self.normalize_batch(
+            (mix_raw, target_raw), norm=self.normalization_norm
+        )
         mix, target = batch_scaled
+        
+        
         batch_size = mix.shape[0]
 
         tb = torch.linspace(0.0, 1.0, self.val_kwargs.n_bins + 1, device=mix.device)
         bin_scores = []
         for i in range(self.val_kwargs.n_bins):
-            # -----------  NEW pad mix, target *and* mask consistently ----------
+            # ----------- pad mix, target *and* mask consistently ----------
             mix_p,   pad_ = self.pad(mix)
             target_p, _   = self.pad(target, pad=pad_)
             if mask is not None:
@@ -1461,20 +1201,21 @@ class Universe(pl.LightningModule):
                 )
             else:
                 mask_p = None
-            # -----------  NEW pad mix, target *and* mask consistently ----------
-            
-            
-            # ls = self.compute_losses(
-            #     self.pad(mix)[0],
-            #     self.pad(target)[0],
-            #     train=False,
-            #     time_sampling="time_uniform",  # always sample uniformly for validation
-            #     t_min=tb[i],
-            #     t_max=tb[i + 1],
-            #     rng=self.rng,
-            # )
-            
-            ls = self.compute_losses(
+
+            if self.have_text:
+                ls = self.compute_losses(
+                    mix_p[0],
+                    target_p[0],
+                    train=False,
+                    time_sampling="time_uniform", # always sample uniformly for validation
+                    t_min=tb[i],
+                    t_max=tb[i + 1],
+                    rng=self.rng,
+                    text=text, ## NEW WITH TEXT ENCODER ###
+                    mask=mask_p,
+                )
+            else: # same as in original
+                ls = self.compute_losses(
                     mix_p[0],
                     target_p[0],
                     train=False,
@@ -1483,14 +1224,13 @@ class Universe(pl.LightningModule):
                     t_max=tb[i + 1],
                     rng=self.rng,
                     mask=mask_p,
-            )
-            
+                )
             bin_scores.append(ls)
-            
+
         self.val_score_bins = tb
         self.val_score_values = torch.tensor(bin_scores, device=mix.device)
         l_score = torch.mean(self.val_score_values)
-
+        
         # compute the cumulative distribution
         # manual cumsum to be deterministic
         v = self.val_score_values.clamp(min=5e-4)
@@ -1498,7 +1238,7 @@ class Universe(pl.LightningModule):
         for idx, p in enumerate(v):
             pr_cum[idx + 1] = pr_cum[idx] + p
         pr_cum = pr_cum / pr_cum[-1]
-        pr_cum[-1] = 1.0 + 1e-5  # to include the last bound
+        pr_cum[-1] = 1.0 + 1e-5 # to include the last bound
         self.pr_cum = pr_cum
 
         self.log(
@@ -1513,118 +1253,65 @@ class Universe(pl.LightningModule):
                 batch_size=batch_size,
             )
 
-        # # validation separation losses
-        # if (
-        #     self.trainer.testing
-        #     or self.n_batches_est_done < self.val_kwargs.max_enh_batches
-        # ):
-        #     # use unscaled batch since the normalization is in the enhancement part
-        #     mix, target = batch
-        #     self.n_batches_est_done += 1
-        #     est = self.enhance(mix, rng=self.rng)
-
-        #     # Save some samples to tensorboard (only in the main process)
-        #     if self.n_tb_samples_saved < self.num_tb_samples:
-        #         num_save = min(
-        #             self.num_tb_samples - self.n_tb_samples_saved, batch_size
-        #         )
-        #         for idx in range(num_save):
-        #             sample_id = f"{self.global_rank}_{self.n_tb_samples_saved}"
-
-        #             mix_ = mix[idx] * 0.95 / torch.max(torch.abs(mix[idx]))
-        #             mix_loud = torchaudio.functional.loudness(mix[idx], self.fs)
-
-        #             if not self.first_val_done:
-        #                 # save mix the first time
-        #                 self.logger.experiment.add_audio(
-        #                     f"mix/{sample_id}",
-        #                     mix_.cpu(),
-        #                     global_step=self.global_step,
-        #                     sample_rate=self.fs,
-        #                 )
-
-        #                 # save target the first time, adjust to have same loudness
-        #                 tgt_loud = torchaudio.functional.loudness(target[idx], self.fs)
-        #                 tgt_gain = 10 ** ((mix_loud - tgt_loud) / 20)
-        #                 self.logger.experiment.add_audio(
-        #                     f"target/{sample_id}",
-        #                     (target[idx] * tgt_gain).cpu(),
-        #                     global_step=self.global_step,
-        #                     sample_rate=self.fs,
-        #                 )
-
-        #             est_loud = torchaudio.functional.loudness(est[idx], self.fs)
-        #             est_gain = 10 ** ((mix_loud - est_loud) / 20)
-        #             self.logger.experiment.add_audio(
-        #                 f"enh/{sample_id}",
-        #                 (est[idx] * est_gain).cpu(),
-        #                 global_step=self.global_step,
-        #                 sample_rate=self.fs,
-        #             )
-
-        #             # increment the number of samples saved, stop if we have enough
-        #             self.n_tb_samples_saved += 1
-        #             if self.n_tb_samples_saved >= self.num_tb_samples:
-        #                 break
-
-        #     for name, loss in self.enh_losses.items():
-        #         val_metric = loss(est, target)
-
-        #         # handle single value case
-        #         if not isinstance(val_metric, dict):
-        #             val_metric = {"": val_metric}
-
-        #         for sub_name, loss_val in val_metric.items():
-        #             self.log(
-        #                 name + sub_name,
-        #                 loss_val.to(mix.device),
-        #                 on_epoch=True,
-        #                 sync_dist=True,
-        #                 batch_size=batch_size,
-        #             )
-        
-        
         # Validation enhancement losses
         if self.trainer.testing or self.n_batches_est_done < self.val_kwargs.max_enh_batches:
-            # mix, target = batch  # Unnormalized batch
             self.n_batches_est_done += 1
-            
-            # est = self.enhance(mix, rng=self.rng)
-            
+
             # ------------- enhancement with mask --------------
-            mix_, target_, mask_ = mix_raw, target_raw, mask
-            est = self.enhance(mix_, rng=self.rng, mask=mask_)
-            
+            if self.have_text:
+                mix_, target_, text_, mask_ = mix_raw, target_raw, text, mask
+                est = self.enhance(mix_, rng=self.rng, text=text_, mask=mask_)
+            else:
+                mix_, target_, mask_ = mix_raw, target_raw, mask
+                est = self.enhance(mix_, rng=self.rng, mask=mask_)
+
             # zero‑out padding region in the estimate so metrics ignore it
             if mask_ is not None:
                 est = est * mask_.unsqueeze(1)
                 target_ = target_ * mask_.unsqueeze(1)
-                
             
+            # Log validation text metrics
+            if self.have_text and hasattr(self, 'text_metrics') and self.text_metrics:
+                for k, v in self.text_metrics.items():
+                    if isinstance(v, (int, float)):
+                        self.log(f"val_text_checks/{k}", v, on_epoch=True, sync_dist=True, batch_size=batch_size)
+                    elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
+                        for i, pos in enumerate(v):
+                            self.log(f"val_text_checks/top_attended_{i}", pos, on_epoch=True, sync_dist=True, batch_size=batch_size)
+            
+            if self.have_text and hasattr(self, 'text_metrics1') and self.text_metrics1:
+                for k, v in self.text_metrics1.items():
+                    if isinstance(v, (int, float)):
+                        self.log(f"val_text_checks1/{k}", v, on_epoch=True, sync_dist=True, batch_size=batch_size)
+                    elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
+                        for i, pos in enumerate(v):
+                            self.log(f"val_text_checks1/top_attended_{i}", pos, on_epoch=True, sync_dist=True, batch_size=batch_size)
+            
+            if self.have_text and hasattr(self, 'text_metrics2') and self.text_metrics2:
+                for k, v in self.text_metrics2.items():
+                    if isinstance(v, (int, float)):
+                        self.log(f"val_text_checks2/{k}", v, on_epoch=True, sync_dist=True, batch_size=batch_size)
+                    elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
+                        for i, pos in enumerate(v):
+                            self.log(f"val_text_checks2/top_attended_{i}", pos, on_epoch=True, sync_dist=True, batch_size=batch_size)
 
-            # ✅ Log validation loss values
+            # log val losses
             for name, loss in self.enh_losses.items():
-                val_metric = loss(est, target)
+                val_metric = loss(est, target_)
                 if not isinstance(val_metric, dict):
                     val_metric = {"": val_metric}
-
                 for sub_name, loss_val in val_metric.items():
                     self.log(
                         f"{name}{sub_name}",
-                        loss_val.to(mix.device),
+                        loss_val.to(mix_.device),
                         on_epoch=True,
                         sync_dist=True,
                         batch_size=batch_size,
                     )
 
-            # import numpy as np
-
-            import numpy as np
-            import os
-
-            # Set a manual temp directory (optional)
-            # os.environ["WANDB_DIR"] = "/tmp/wandb_cache"
-
+            # optional code: wandb logs etc. 
+            # (unchanged from old code, just do the normal audio logging)
+            
             # ✅ Save a few audio samples to Wandb (only in main process)
             if self.trainer.is_global_zero and self.n_tb_samples_saved < self.num_tb_samples:
                 num_save = min(self.num_tb_samples - self.n_tb_samples_saved, batch_size)
@@ -1710,9 +1397,321 @@ class Universe(pl.LightningModule):
                 # ✅ Log all samples at once (efficient logging)
                 if audio_logs:
                     print("[DEBUG] Sending audio logs to Wandb...")
-                    self.logger.experiment.log(audio_logs, step=self.global_step)
+                    # self.logger.experiment.log(audio_logs, step=self.global_step)
                 else:
                     print("[DEBUG] No audio logs found! Wandb log skipped.")
+                    
+                    
+                # >>> NEW 03 MAY  <<< — attention maps ---------------------------------
+                att_logs = {}
+                tc = getattr(self.condition_model, "text_conditioner", None)
+                att_map = getattr(tc, "last_attn_map", None)
+
+                if att_map is not None:
+                    attn = att_map.cpu().numpy()          # shape [B, Q, S]
+                    for k in range(num_save):
+                        fig, ax = plt.subplots(figsize=(5, 4))
+                        im = ax.imshow(attn[k], aspect="auto", origin="lower")
+                        ax.set_xlabel("Text tokens"); ax.set_ylabel("Mel frames")
+                        ax.set_title(f"Attn {self.global_step}_{k}")
+                        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+                        att_logs[f"attention/attn_{sample_id}_{k}"] = (
+                            wandb.Image(fig, caption=f"Cross‑Attention {sample_id}_{k}"))
+                        plt.close(fig)
+                else:
+                    print("[DEBUG] No attention map found in TextConditioner.")
+                # ----------------------------------------------------------------
+
+                # send everything together
+                payload = {**audio_logs, **att_logs}
+                if payload:
+                    self.logger.experiment.log(payload, step=self.global_step)
+                
+    #             # >>> NEW 03 MAY  <<< — attention maps ---------------------------------
+
+    # #### VALIDATION STEP - OLD CODE
+    # def validation_step(self, batch, batch_idx, dataset_i=0):
+    #     # batch = batch[:2]
+        
+    #     batch = batch[:4]
+    #     mix_raw, target_raw, text, mask = batch
+        
+    #     # ------------- apply mask BEFORE normalisation -----------
+    #     if mask is not None:
+    #         m = mask.unsqueeze(1)                 # [B,1,T]
+    #         mix_raw    = mix_raw    * m
+    #         target_raw = target_raw * m
+        
+
+    #     # batch_scaled, *stats = self.normalize_batch(batch, norm=self.normalization_norm)
+    #     batch_scaled, *stats = self.normalize_batch((mix_raw, target_raw), norm=self.normalization_norm)
+    #     mix, target = batch_scaled
+    #     batch_size = mix.shape[0]
+
+    #     tb = torch.linspace(0.0, 1.0, self.val_kwargs.n_bins + 1, device=mix.device)
+    #     bin_scores = []
+    #     for i in range(self.val_kwargs.n_bins):
+    #         # -----------  NEW pad mix, target *and* mask consistently ----------
+    #         mix_p,   pad_ = self.pad(mix)
+    #         target_p, _   = self.pad(target, pad=pad_)
+    #         if mask is not None:
+    #             mask_p = torch.nn.functional.pad(
+    #                 mask, (pad_ // 2, pad_ - pad_ // 2)
+    #             )
+    #         else:
+    #             mask_p = None
+    #         # -----------  NEW pad mix, target *and* mask consistently ----------
+            
+            
+    #         # ls = self.compute_losses(
+    #         #     self.pad(mix)[0],
+    #         #     self.pad(target)[0],
+    #         #     train=False,
+    #         #     time_sampling="time_uniform",  # always sample uniformly for validation
+    #         #     t_min=tb[i],
+    #         #     t_max=tb[i + 1],
+    #         #     rng=self.rng,
+    #         # )
+            
+    #         ls = self.compute_losses(
+    #                 mix_p[0],
+    #                 target_p[0],
+    #                 train=False,
+    #                 time_sampling="time_uniform", # always sample uniformly for validation
+    #                 t_min=tb[i],
+    #                 t_max=tb[i + 1],
+    #                 rng=self.rng,
+    #                 mask=mask_p,
+    #         )
+            
+    #         bin_scores.append(ls)
+            
+    #     self.val_score_bins = tb
+    #     self.val_score_values = torch.tensor(bin_scores, device=mix.device)
+    #     l_score = torch.mean(self.val_score_values)
+
+    #     # compute the cumulative distribution
+    #     # manual cumsum to be deterministic
+    #     v = self.val_score_values.clamp(min=5e-4)
+    #     pr_cum = v.new_zeros(v.shape[0] + 1)
+    #     for idx, p in enumerate(v):
+    #         pr_cum[idx + 1] = pr_cum[idx] + p
+    #     pr_cum = pr_cum / pr_cum[-1]
+    #     pr_cum[-1] = 1.0 + 1e-5  # to include the last bound
+    #     self.pr_cum = pr_cum
+
+    #     self.log(
+    #         "val/score", l_score, on_epoch=True, sync_dist=True, batch_size=batch_size
+    #     )
+    #     for i in range(self.val_kwargs.n_bins):
+    #         self.log(
+    #             f"val/score_{tb[i]:.2f}-{tb[i+1]:.2f}",
+    #             bin_scores[i],
+    #             on_epoch=True,
+    #             sync_dist=True,
+    #             batch_size=batch_size,
+    #         )
+
+    #     # # validation separation losses
+    #     # if (
+    #     #     self.trainer.testing
+    #     #     or self.n_batches_est_done < self.val_kwargs.max_enh_batches
+    #     # ):
+    #     #     # use unscaled batch since the normalization is in the enhancement part
+    #     #     mix, target = batch
+    #     #     self.n_batches_est_done += 1
+    #     #     est = self.enhance(mix, rng=self.rng)
+
+    #     #     # Save some samples to tensorboard (only in the main process)
+    #     #     if self.n_tb_samples_saved < self.num_tb_samples:
+    #     #         num_save = min(
+    #     #             self.num_tb_samples - self.n_tb_samples_saved, batch_size
+    #     #         )
+    #     #         for idx in range(num_save):
+    #     #             sample_id = f"{self.global_rank}_{self.n_tb_samples_saved}"
+
+    #     #             mix_ = mix[idx] * 0.95 / torch.max(torch.abs(mix[idx]))
+    #     #             mix_loud = torchaudio.functional.loudness(mix[idx], self.fs)
+
+    #     #             if not self.first_val_done:
+    #     #                 # save mix the first time
+    #     #                 self.logger.experiment.add_audio(
+    #     #                     f"mix/{sample_id}",
+    #     #                     mix_.cpu(),
+    #     #                     global_step=self.global_step,
+    #     #                     sample_rate=self.fs,
+    #     #                 )
+
+    #     #                 # save target the first time, adjust to have same loudness
+    #     #                 tgt_loud = torchaudio.functional.loudness(target[idx], self.fs)
+    #     #                 tgt_gain = 10 ** ((mix_loud - tgt_loud) / 20)
+    #     #                 self.logger.experiment.add_audio(
+    #     #                     f"target/{sample_id}",
+    #     #                     (target[idx] * tgt_gain).cpu(),
+    #     #                     global_step=self.global_step,
+    #     #                     sample_rate=self.fs,
+    #     #                 )
+
+    #     #             est_loud = torchaudio.functional.loudness(est[idx], self.fs)
+    #     #             est_gain = 10 ** ((mix_loud - est_loud) / 20)
+    #     #             self.logger.experiment.add_audio(
+    #     #                 f"enh/{sample_id}",
+    #     #                 (est[idx] * est_gain).cpu(),
+    #     #                 global_step=self.global_step,
+    #     #                 sample_rate=self.fs,
+    #     #             )
+
+    #     #             # increment the number of samples saved, stop if we have enough
+    #     #             self.n_tb_samples_saved += 1
+    #     #             if self.n_tb_samples_saved >= self.num_tb_samples:
+    #     #                 break
+
+    #     #     for name, loss in self.enh_losses.items():
+    #     #         val_metric = loss(est, target)
+
+    #     #         # handle single value case
+    #     #         if not isinstance(val_metric, dict):
+    #     #             val_metric = {"": val_metric}
+
+    #     #         for sub_name, loss_val in val_metric.items():
+    #     #             self.log(
+    #     #                 name + sub_name,
+    #     #                 loss_val.to(mix.device),
+    #     #                 on_epoch=True,
+    #     #                 sync_dist=True,
+    #     #                 batch_size=batch_size,
+    #     #             )
+        
+        
+    #     # Validation enhancement losses
+    #     if self.trainer.testing or self.n_batches_est_done < self.val_kwargs.max_enh_batches:
+    #         # mix, target = batch  # Unnormalized batch
+    #         self.n_batches_est_done += 1
+            
+    #         # est = self.enhance(mix, rng=self.rng)
+            
+    #         # ------------- enhancement with mask --------------
+    #         mix_, target_, mask_ = mix_raw, target_raw, mask
+    #         est = self.enhance(mix_, rng=self.rng, mask=mask_)
+            
+    #         # zero‑out padding region in the estimate so metrics ignore it
+    #         if mask_ is not None:
+    #             est = est * mask_.unsqueeze(1)
+    #             target_ = target_ * mask_.unsqueeze(1)
+                
+            
+
+    #         # ✅ Log validation loss values
+    #         for name, loss in self.enh_losses.items():
+    #             val_metric = loss(est, target)
+    #             if not isinstance(val_metric, dict):
+    #                 val_metric = {"": val_metric}
+
+    #             for sub_name, loss_val in val_metric.items():
+    #                 self.log(
+    #                     f"{name}{sub_name}",
+    #                     loss_val.to(mix.device),
+    #                     on_epoch=True,
+    #                     sync_dist=True,
+    #                     batch_size=batch_size,
+    #                 )
+
+    #         # import numpy as np
+
+    #         import numpy as np
+    #         import os
+
+    #         # Set a manual temp directory (optional)
+    #         # os.environ["WANDB_DIR"] = "/tmp/wandb_cache"
+
+    #         # ✅ Save a few audio samples to Wandb (only in main process)
+    #         if self.trainer.is_global_zero and self.n_tb_samples_saved < self.num_tb_samples:
+    #             num_save = min(self.num_tb_samples - self.n_tb_samples_saved, batch_size)
+    #             audio_logs = {}
+
+    #             print(f"[DEBUG] Logging {num_save} audio samples to Wandb...")
+
+    #             for idx in range(num_save):
+    #                 sample_id = f"sample_{self.global_rank}_{self.n_tb_samples_saved}"
+
+    #                 # Debug print for sample info
+    #                 print(f"[DEBUG] Processing sample {sample_id}")
+
+    #                 # Normalize for logging
+    #                 mix_ = mix[idx] * 0.95 / torch.max(torch.abs(mix[idx]))
+    #                 mix_loud = torchaudio.functional.loudness(mix[idx], self.fs)
+
+    #                 # ✅ Convert tensor to NumPy and ensure correct dtype & shape
+    #                 mix_np = mix_.cpu().numpy().astype(np.float32)
+
+    #                 # Ensure the shape is (samples,)
+    #                 if mix_np.ndim == 2:
+    #                     mix_np = mix_np.reshape(-1)  # Convert from (1, samples) to (samples,)
+
+    #                 # print(f"[DEBUG] Input audio shape: {mix_np.shape}, dtype: {mix_np.dtype}, max: {mix_np.max()}, min: {mix_np.min()}")
+
+    #                 # Check for NaNs or Infs before logging
+    #                 if np.isnan(mix_np).any() or np.isinf(mix_np).any():
+    #                     print(f"[ERROR] Detected NaN or Inf values in input audio: {sample_id}")
+    #                     continue  # Skip this sample
+
+    #                 # Ensure a standard sample rate (e.g., 16kHz)
+    #                 sample_rate = 16000  # Change if needed
+
+    #                 # Log input audio
+    #                 audio_logs[f"audio/input_{sample_id}"] = wandb.Audio(
+    #                     mix_np, sample_rate=sample_rate, caption="Noisy Input"
+    #                 )
+
+    #                 if not self.first_val_done:
+    #                     # Save clean target the first time
+    #                     tgt_loud = torchaudio.functional.loudness(target[idx], self.fs)
+    #                     tgt_gain = 10 ** ((mix_loud - tgt_loud) / 20)
+
+    #                     target_np = (target[idx] * tgt_gain).cpu().numpy().astype(np.float32)
+    #                     if target_np.ndim == 2:
+    #                         target_np = target_np.reshape(-1)
+
+    #                     print(f"[DEBUG] Target audio shape: {target_np.shape}, dtype: {target_np.dtype}, max: {target_np.max()}, min: {target_np.min()}")
+
+    #                     if np.isnan(target_np).any() or np.isinf(target_np).any():
+    #                         print(f"[ERROR] Detected NaN or Inf values in target audio: {sample_id}")
+    #                         continue  # Skip this sample
+
+    #                     audio_logs[f"audio/target_{sample_id}"] = wandb.Audio(
+    #                         target_np, sample_rate=sample_rate, caption="Clean Target"
+    #                     )
+
+    #                 # Log enhanced output
+    #                 est_loud = torchaudio.functional.loudness(est[idx], self.fs)
+    #                 est_gain = 10 ** ((mix_loud - est_loud) / 20)
+
+    #                 est_np = (est[idx] * est_gain).cpu().numpy().astype(np.float32)
+    #                 if est_np.ndim == 2:
+    #                     est_np = est_np.reshape(-1)
+
+    #                 # print(f"[DEBUG] Output audio shape: {est_np.shape}, dtype: {est_np.dtype}, max: {est_np.max()}, min: {est_np.min()}")
+
+    #                 if np.isnan(est_np).any() or np.isinf(est_np).any():
+    #                     print(f"[ERROR] Detected NaN or Inf values in output audio: {sample_id}")
+    #                     continue  # Skip this sample
+
+    #                 audio_logs[f"audio/output_{sample_id}"] = wandb.Audio(
+    #                     est_np, sample_rate=sample_rate, caption="Enhanced Output"
+    #                 )
+
+    #                 # Update sample count
+    #                 self.n_tb_samples_saved += 1
+    #                 if self.n_tb_samples_saved >= self.num_tb_samples:
+    #                     print(f"[DEBUG] Reached num_tb_samples limit ({self.num_tb_samples}), stopping logging.")
+    #                     break
+
+    #             # ✅ Log all samples at once (efficient logging)
+    #             if audio_logs:
+    #                 print("[DEBUG] Sending audio logs to Wandb...")
+    #                 self.logger.experiment.log(audio_logs, step=self.global_step)
+    #             else:
+    #                 print("[DEBUG] No audio logs found! Wandb log skipped.")
 
     
     
