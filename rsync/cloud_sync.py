@@ -15,7 +15,9 @@ EXCLUDE_PATTERNS = ["checkpoints/universe/exper/best-model.ckpt",
 def _sync_worker(local_dir: str, remote_dir: str):
     t0 = time.strftime("%H:%M:%S")
     print(f"[RsyncBackup] ⬆️  {t0}  upload → {remote_dir}")
-    cmd = ["rclone", "sync", "--progress", "--stats-one-line", local_dir, remote_dir]
+    cmd = ["rclone", "sync", "--progress", "--stats-one-line", 
+           "--local-no-check-updated",   # <‑‑ NEW
+           local_dir, remote_dir]
     for pat in EXCLUDE_PATTERNS:
         cmd += ["--exclude", pat]
     rc = subprocess.run(cmd).returncode

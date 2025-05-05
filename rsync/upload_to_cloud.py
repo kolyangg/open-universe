@@ -32,7 +32,9 @@ def upload_to_cloud(local_exp_path: str, remote_exp_root: str):
     remote_dir = remote_path.rstrip("/") + "/"
 
     # Construct rclone command with exclusions
-    cmd = ["rclone", "sync", "--progress", local_dir, remote_dir]
+    cmd = ["rclone", "sync", "--progress", 
+           "--local-no-check-updated",   # <‑‑ NEW
+           local_dir, remote_dir]
     for pattern in EXCLUDE_PATTERNS:
         cmd += ["--exclude", pattern]
 
