@@ -4,9 +4,10 @@ import subprocess
 from rsync_auth import ensure_login
 
 # 📁 Define folders or files (glob-style) to exclude from upload
-EXCLUDE_PATTERNS = [
-    "checkpoints/universe/exper/best-model.ckpt",
-    "data/"
+EXCLUDE_PATTERNS = ["checkpoints/universe/exper/best-model.ckpt", 
+                    "data/",
+                    "wandb/latest-run/files/media/**",  # any media artefacts in the latest run
+                    "wandb/run-*/files/media/**",       # media artefacts in every run-* folder]
 ]
 
 def upload_to_cloud(local_exp_path: str, remote_exp_root: str):
