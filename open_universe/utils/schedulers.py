@@ -53,7 +53,14 @@ class LinearWarmupCosineAnnealingLR(torch.optim.lr_scheduler.CosineAnnealingLR):
     ):
         self.T_cosine = T_cosine
         self.T_warmup = T_warmup
-        super().__init__(optimizer, T_max, eta_min, last_epoch, verbose)
+        
+        ### FIX 05 MAY
+        # super().__init__(optimizer, T_max, eta_min, last_epoch, verbose)
+        # `CosineAnnealingLR` in torch ≥2.3 is (optimizer, T_max, eta_min=0, last_epoch=-1)
+        # so we no longer pass `verbose`
+        super().__init__(optimizer, T_max, eta_min, last_epoch)
+        ### FIX 05 MAY
+        
         assert self.T_warmup < self.T_cosine < self.T_max
 
     def get_lr(self):
