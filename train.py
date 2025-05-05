@@ -155,6 +155,7 @@ def main(cfg):
         # RsyncBackup(run_dir=exp_name,             # ← NEW (no‑op if env not set)        ### NEW 02 MAY
         # remote_root=os.getenv("CLOUD_EXP_ROOT")),  
         RsyncBackup(remote_root=os.getenv("CLOUD_EXP_ROOT") or print("[RsyncBackup] CLOUD_EXP_ROOT not set – uploads DISABLED")) ### NEW 02 MAY
+        ## default CLOUD_EXP_ROOT is "dropbox:/speech_enh_backups"
         
     ]
 
