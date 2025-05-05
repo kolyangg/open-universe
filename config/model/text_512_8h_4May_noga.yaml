@@ -67,6 +67,7 @@ losses:
   weights:
     mel_l1: 45.0 #  60.0 # increased from 45.0 for stronger reconstruction
     score: 1.0
+    guided_attn: 0.0 # 10.0   # NEW 04 May: try 5–20; 0 disables GA loss
   use_signal_decoupling: true
   signal_decoupling_act: snake
   score_loss:
