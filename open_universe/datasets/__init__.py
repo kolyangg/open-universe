@@ -53,6 +53,12 @@ from .static_dataset_combo import NoisyDataset
 
 
 
+# 06 May: add random bucket option to DataModule for more variability
+
+from .datamodule_combo2 import DataModule
+from .static_dataset_combo import NoisyDataset
+
+
 # 27 Apr: Combined version + strfix
 
 # from .datamodule_combo import DataModule
