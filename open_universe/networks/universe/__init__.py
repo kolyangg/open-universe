@@ -249,11 +249,20 @@ from .mdn import MixtureDensityNetworkLoss
 # from .score import ScoreNetwork
 
 
-# 06 May version
-from .condition_06May import ConditionerNetwork # try POS embedding
-from .universe_gan_NS_06May import UniverseGAN  # upd guid_attn loss to add masking
+# # 06 May version
+# from .condition_06May import ConditionerNetwork # try POS embedding
+# from .universe_gan_NS_06May import UniverseGAN  # upd guid_attn loss to add masking
+# from .textencoder_04May import TextEncoder
+# from .score import ScoreNetwork
+
+
+
+# 06 May version v2 (fixing attention further)
+from .condition_06May2 import ConditionerNetwork # try POS embedding
+from .universe_gan_NS_06May2 import UniverseGAN  # upd guid_attn loss to add masking
 from .textencoder_04May import TextEncoder
 from .score import ScoreNetwork
+
 
 
 # # # Trying WavLM
