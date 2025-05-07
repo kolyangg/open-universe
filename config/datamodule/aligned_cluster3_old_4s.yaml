@@ -12,7 +12,7 @@ val_sample_batches:  20 # 770
 
 train:
   dataset: vb-train-16k
-  dl_opts: {batch_size: 4, num_workers: 12, shuffle: true,  pin_memory: true} # 8 for 2 sec, 4 for 4 sec
+  dl_opts: {batch_size: 8, num_workers: 12, shuffle: true,  pin_memory: true} # 8 for 2 sec, 4 for 4 sec
   # was 16 for 2 sec for cluster
   # 4 for 4 sec for local
 
