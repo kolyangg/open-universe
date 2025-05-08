@@ -257,11 +257,19 @@ from .mdn import MixtureDensityNetworkLoss
 
 
 
-# 06 May version v2 (fixing attention further)
+# # 06 May version v2 (fixing attention further)
+# from .condition_06May2 import ConditionerNetwork # try POS embedding
+# from .universe_gan_NS_06May2 import UniverseGAN  # upd guid_attn loss to add masking
+# from .textencoder_04May import TextEncoder
+# from .score import ScoreNetwork
+
+
+# 08 May version - further improvements to attention
 from .condition_06May2 import ConditionerNetwork # try POS embedding
 from .universe_gan_NS_06May2 import UniverseGAN  # upd guid_attn loss to add masking
 from .textencoder_04May import TextEncoder
 from .score import ScoreNetwork
+
 
 
 
