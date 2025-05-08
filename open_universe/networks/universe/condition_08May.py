@@ -303,6 +303,13 @@ class CrossAttentionBlock(torch.nn.Module):
         print(f'Using cross-attn temperature: {self.temperature}')
         # --- NEW 01 MAY
 
+        ## NEW 08 MAY ##
+        # Initialize a local counter for dynamic temperature
+        self.train_step_counter = 0
+        self.temp_min_scale = 0.3   # Minimum temperature scale factor
+        ## NEW 08 MAY ##
+
+
     def forward(self, x, cond, x_mask=None, cond_mask=None):
         text_metrics = {}
         
@@ -318,8 +325,17 @@ class CrossAttentionBlock(torch.nn.Module):
         ## UPD 7 MAY ## 
         # Dynamic temperature that decreases as training progresses
         if self.training:
-            # Start hot (high temperature), gradually cool down
-            scale_factor = max(0.3, min(1.0, 1.0 - self.global_step / 50000))
+            # # Start hot (high temperature), gradually cool down
+            # scale_factor = max(0.3, min(1.0, 1.0 - self.global_step / 50000))
+            # effective_temp = self.temperature * scale_factor
+
+            ## UPD 8 MAY ##
+            # Increment the local counter - simpler than trying to access global_step
+            self.train_step_counter += 1
+            # Scale from 1.0 -> temp_min_scale over ~50k steps
+            scale_factor = max(self.temp_min_scale, 
+                             min(1.0, 1.0 - self.train_step_counter / 50000))
+            ## UPD 8 MAY ##
             effective_temp = self.temperature * scale_factor
         else:
             effective_temp = self.temperature
