@@ -264,14 +264,22 @@ from .mdn import MixtureDensityNetworkLoss
 # from .score import ScoreNetwork
 
 
-# 08 May version - further improvements to attention
-from .condition_08May import ConditionerNetwork # try POS embedding
-from .universe_gan_NS_08May import UniverseGAN  # upd guid_attn loss to add masking
-# from .textencoder_08May import TextEncoder
-# from .textencoder_08May_test import TextEncoder
+# # 08 May version - further improvements to attention
+# from .condition_08May import ConditionerNetwork # try POS embedding
+# from .universe_gan_NS_08May import UniverseGAN  # upd guid_attn loss to add masking
+# # from .textencoder_08May import TextEncoder
+# # from .textencoder_08May_test import TextEncoder
 # from .textencoder_08May_test2 import TextEncoder
-# from .textencoder_08May_espeak import TextEncoder
-from .textencoder_08May_simple2 import TextEncoder
+# # from .textencoder_08May_espeak import TextEncoder
+# # from .textencoder_08May_simple2 import TextEncoder
+# from .score import ScoreNetwork
+
+
+
+# 09 May version 
+from .condition_09May import ConditionerNetwork # try POS embedding
+from .universe_gan_NS_08May import UniverseGAN  # upd guid_attn loss to add masking
+from .textencoder_09May import TextEncoder
 from .score import ScoreNetwork
 
 

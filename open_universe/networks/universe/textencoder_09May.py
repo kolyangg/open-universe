@@ -76,6 +76,9 @@ class TextEncoder(nn.Module):
         self.text_cleaner = TextCleaner()
         self.phonemizer = OpenPhonemizer()
 
+        # keep the id of the plain-space symbol for masking later
+        self.space_id = self.text_cleaner.word_index_dictionary[" "]
+
         # Build reverse symbol lookup for **debug prints only** ---------------------
         self.id2symbol: dict[int, str] | None = {
             idx: ch for ch, idx in self.text_cleaner.word_index_dictionary.items()
@@ -152,7 +155,19 @@ class TextEncoder(nn.Module):
             print(f"[DEBUG] IPA  : '{phonemes}'")
 
             # Clean & map to IDs ----------------------------------------------------
-            ids_list = self.text_cleaner(phonemes)
+            # ids_list = self.text_cleaner(phonemes)
+
+
+            ids_raw = self.text_cleaner(phonemes)
+            # ── collapse consecutive duplicates ───────────────────────────────
+            ids_list = [ids_raw[0]]
+            for t in ids_raw[1:]:
+                if t != ids_list[-1]:
+                    ids_list.append(t)
+            if len(ids_raw) != len(ids_list):
+                print(f"[DEBUG] dedup: {len(ids_raw)}→{len(ids_list)} tokens")
+
+
             ids = torch.LongTensor(ids_list)
 
             # Debug prints ---------------------------------------------------------
@@ -198,7 +213,14 @@ class TextEncoder(nn.Module):
         global_emb = self.fc_global(self.global_norm(cls_emb))
         seq_emb = self.fc_seq(self.seq_norm(outputs.last_hidden_state))
 
-        key_mask = attention_mask == 0  # True → pad
+        # key_mask = attention_mask == 0  # True → pad
+
+        # Build a boolean mask for cross-attention
+        #   – pad       -> True  (already 1 in attention_mask)
+        #   – space id  -> True  (new)
+        key_mask = (attention_mask == 0) | (phoneme_ids == self.space_id)
+
+
 
         # stats --------------------------------------------------------------------
         print(
