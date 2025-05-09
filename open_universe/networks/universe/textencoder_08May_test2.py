@@ -5,8 +5,9 @@ import torch
 import torch.nn as nn
 from transformers import AlbertConfig, AlbertModel, TransfoXLTokenizer
 import sys
-import re, string
-import pickle  # Add this import for pickle
+import re, string                                          # ADD 02 MAY
+
+
 
 ### 04 MAY - FIX: make it work with newer torch versions
 # ─── Allow the custom class stored in the PL‑BERT checkpoint ──────────────────
@@ -24,80 +25,9 @@ PLBERT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../
 if PLBERT_PATH not in sys.path:
     sys.path.insert(0, PLBERT_PATH)
 
+# Instead of using EspeakBackend, we use OpenPhonemizer
+from openphonemizer import OpenPhonemizer
 from text_utils import TextCleaner
-
-# Simple tokenizer class
-class SimpleTokenizer:
-    def __init__(self, vocab_size=1000):
-        """
-        A simple character/word-level tokenizer with a fixed vocabulary size.
-        Args:
-            vocab_size: Maximum vocabulary size
-        """
-        self.vocab_size = vocab_size
-        self.word_to_id = {"<PAD>": 0, "<UNK>": 1}
-        self.id_to_word = {0: "<PAD>", 1: "<UNK>"}
-        self.next_id = 2  # Start from 2 (0=PAD, 1=UNK)
-        
-    def tokenize(self, text):
-        """Tokenize text into word IDs"""
-        # Simple word tokenization (split on spaces)
-        words = text.lower().split()
-        
-        # Convert to IDs, adding new words to vocabulary if needed
-        ids = []
-        for word in words:
-            if word not in self.word_to_id:
-                # Only add new words if we haven't reached vocab_size
-                if self.next_id < self.vocab_size:
-                    self.word_to_id[word] = self.next_id
-                    self.id_to_word[self.next_id] = word
-                 
-                    self.word_to_id["<CLS>"] = 2  # Add a CLS token for the first position
-                    self.id_to_word[2] = "<CLS>"
-                 
-                    self.next_id += 2
-                else:
-                    # If vocab is full, use <UNK>
-                    ids.append(self.word_to_id["<UNK>"])
-                    continue
-            
-            ids.append(self.word_to_id[word])
-        
-        return ids
-    
-    def decode(self, ids):
-        """Convert token IDs back to words"""
-        return [self.id_to_word.get(id, "<UNK>") for id in ids]
-    
-    def convert_ids_to_tokens(self, ids):
-        """Alias for decode to match HuggingFace API"""
-        return self.decode(ids)
-    
-    def save(self, path):
-        """Save tokenizer to file."""
-        with open(path, 'wb') as f:
-            pickle.dump({
-                'vocab_size': self.vocab_size,
-                'word_to_id': self.word_to_id,
-                'id_to_word': self.id_to_word,
-                'next_id': self.next_id
-            }, f)
-        print(f"Tokenizer saved to {path}")
-    
-    @classmethod
-    def load(cls, path):
-        """Load tokenizer from file."""
-        with open(path, 'rb') as f:
-            data = pickle.load(f)
-        
-        tokenizer = cls(vocab_size=data['vocab_size'])
-        tokenizer.word_to_id = data['word_to_id']
-        tokenizer.id_to_word = data['id_to_word']
-        tokenizer.next_id = data['next_id']
-        
-        print(f"Tokenizer loaded from {path} with {len(tokenizer.word_to_id)} words")
-        return tokenizer
 
 class TextEncoder(nn.Module):
     def __init__(self, hidden_dim, seq_dim=None, freeze_plbert=True):
@@ -133,16 +63,83 @@ class TextEncoder(nn.Module):
         filtered_state_dict = {k: v for k, v in new_state_dict.items() if k in self.plbert.state_dict()}
         self.plbert.load_state_dict(filtered_state_dict, strict=False)
         
-        # Use our simple tokenizer - fallback to creating one if loading fails
+        # Instantiate the tokenizer from PL-BERT config
+        self.tokenizer = TransfoXLTokenizer.from_pretrained(plbert_config['dataset_params']['tokenizer'])
+        self.text_cleaner = TextCleaner()
+
+                # --- after self.text_cleaner = TextCleaner() ---
+        def _find_phon_vocab(obj):
+            """Recursively search for an attr whose length matches
+            the largest token id we saw during a quick test run."""
+            # Most common attribute names in PL-BERT repos
+            CANDIDATE_ATTRS = ["idx2token", "index2token", "itos",
+                            "token_list", "vocab", "symbols",
+                            "symbols_list", "phonemes"]
+
+            visited = set()
+            stack = [obj]
+            while stack:
+                cur = stack.pop()
+                if id(cur) in visited:
+                    continue
+                visited.add(id(cur))
+
+                for name in dir(cur):
+                    if name.startswith("_"):
+                        continue
+                    try:
+                        val = getattr(cur, name)
+                    except Exception:
+                        continue
+
+                    if isinstance(val, (list, tuple)) and len(val) > 100:
+                        # plausible vocab object
+                        return val
+                    if isinstance(val, dict) and all(isinstance(k, int) for k in val):
+                        # dict mapping id->symbol
+                        return val
+                    if any(key in name.lower() for key in CANDIDATE_ATTRS):
+                        return val
+
+                    # keep digging
+                    if not isinstance(val, (int, float, str, bytes)):
+                        stack.append(val)
+            return None
+
+        self.id2phon = _find_phon_vocab(self.text_cleaner)
+        if self.id2phon is None:
+            print("[WARNING] Phoneme vocabulary not found – debug prints will be wrong")
+
+
+
         try:
-            self.tokenizer = SimpleTokenizer.load("simple_tokenizer.pkl")
-            print("[INFO] Loaded pre-trained tokenizer")
-        except Exception as e:
-            print(f"[WARNING] Failed to load tokenizer: {e}")
-            print("[INFO] Creating new tokenizer instead")
-            self.tokenizer = SimpleTokenizer(vocab_size=1000)
+            # TextCleaner usually owns or wraps the SequenceTokenizer
+            #   └── self.text_cleaner.preproc.tokenizer  (PL-BERT original code)
+            self.phon_tokenizer = self.text_cleaner.preproc.tokenizer
+        except AttributeError:
+            # fall-backs in case the codebase changed
+            if hasattr(self.text_cleaner, "tokenizer"):
+                self.phon_tokenizer = self.text_cleaner.tokenizer
+            elif hasattr(self.text_cleaner, "token2idx"):      # very old versions
+                from types import SimpleNamespace
+                self.phon_tokenizer = SimpleNamespace(
+                    token2idx=self.text_cleaner.token2idx
+                )
+            else:
+                self.phon_tokenizer = None        # will trigger the old behaviour
+
+
+        if self.phon_tokenizer is not None:
+            self.idx2phon = (
+                self.phon_tokenizer.idx2token       # many repos expose this list
+                if hasattr(self.phon_tokenizer, "idx2token")
+                else {i: t for t, i in self.phon_tokenizer.token2idx.items()}
+            )
+
+
         
-        print(f"[DEBUG] Using tokenizer with vocab size of {self.tokenizer.vocab_size}")
+        # Initialize OpenPhonemizer (no external dependency on espeak)
+        self.phonemizer = OpenPhonemizer()
         
         # Projection layers for global and sequence outputs.
         self.fc_global = nn.Linear(self.plbert.config.hidden_size, hidden_dim)
@@ -160,17 +157,21 @@ class TextEncoder(nn.Module):
         nn.init.zeros_(self.fc_global.bias)
         nn.init.zeros_(self.fc_seq.bias)
 
-        # Cache for tokenized sentences
-        self.token_cache = {}
+        # Cache the tokenizer
+        self.phoneme_cache = {}
         
         
         ### DEBUGGING ###
         # Print sample of vocabulary to understand token mappings
         try:
-            # Show initial vocabulary for our simple tokenizer
-            vocab_preview = dict(list(self.tokenizer.word_to_id.items())[:10])
-            print(f"[DEBUG] Vocabulary preview: {vocab_preview}")
-            print(f"[DEBUG] Vocabulary size: {len(self.tokenizer.word_to_id)}")
+            if hasattr(self.tokenizer, 'vocab'):
+                vocab = self.tokenizer.vocab
+                print(f"[DEBUG] Vocabulary size: {len(vocab)}")
+                print(f"[DEBUG] Sample vocabulary items (first 10):")
+                for i, (token, idx) in enumerate(list(vocab.items())[:10]):
+                    print(f"  - Token: '{token}', ID: {idx}")
+            else:
+                print("[DEBUG] No directly accessible vocabulary found in tokenizer")
         except Exception as e:
             print(f"[WARNING] Error accessing vocabulary: {e}")
         ### DEBUGGING ###
@@ -182,15 +183,35 @@ class TextEncoder(nn.Module):
         self.global_norm = nn.LayerNorm(self.plbert.config.hidden_size)
         ## ADD 08 MAY ##        
 
-    ### DEBUGGING ###
-    def decode_tokens(self, token_ids):
-        """Helper method to decode token IDs back to their token representations."""
-        try:
-            return self.tokenizer.convert_ids_to_tokens(token_ids)
-        except Exception as e:
-            print(f"[WARNING] Error decoding tokens: {e}")
-            return [f"<ERROR:{i}>" for i in token_ids]
-    ### DEBUGGING ###    
+    # ### DEBUGGING ###
+    # def decode_tokens(self, token_ids):
+    #     """Helper method to decode token IDs back to their token representations."""
+    #     try:
+    #         if hasattr(self.tokenizer, 'convert_ids_to_tokens'):
+    #             return self.tokenizer.convert_ids_to_tokens(token_ids)
+    #         else:
+    #             return [f"<ID:{i}>" for i in token_ids]  # Fallback if method not available
+    #     except Exception as e:
+    #         print(f"[WARNING] Error decoding tokens: {e}")
+    #         return [f"<ERROR:{i}>" for i in token_ids]
+    # ### DEBUGGING ###    
+
+    ### DEBUGGING2 ###
+    def decode_tokens(self, ids):
+        # Primary: phoneme vocabulary we just found
+        if hasattr(self, "id2phon") and self.id2phon is not None:
+            if isinstance(self.id2phon, (list, tuple)):
+                return [self.id2phon[i] if i < len(self.id2phon) else f"<UNK:{i}>" for i in ids]
+            else:  # dict
+                return [self.id2phon.get(i, f"<UNK:{i}>") for i in ids]
+
+        # Fallbacks (old behaviour)
+        if hasattr(self.tokenizer, "convert_ids_to_tokens"):
+            return self.tokenizer.convert_ids_to_tokens(ids)
+        return [f"<ID:{i}>" for i in ids]
+
+    ### DEBUGGING2 ###
+
 
 
     def tokenize(self, sents):
@@ -211,19 +232,29 @@ class TextEncoder(nn.Module):
                 print(f"[DEBUG] Empty string detected, using placeholder token ID: [0]")
                 continue
 
-            # Use our simple tokenizer directly on the text
+            # Use OpenPhonemizer to get phonemes.
+            # Assume it returns a string; adjust if a list is returned.
             try:
-                if sent in self.token_cache:
-                    token_ids_list = self.token_cache[sent]
+                if sent in self.phoneme_cache:
+                    phonemes = self.phoneme_cache[sent]
                 else:
-                    token_ids_list = self.tokenizer.tokenize(sent)
-                    self.token_cache[sent] = token_ids_list
-                print(f"[DEBUG] Tokenized: '{sent}' -> {token_ids_list[:10]}...")
+                    phonemes = self.phonemizer(sent)
+                    self.phoneme_cache[sent] = phonemes
+                print(f"[DEBUG] Phonemized: '{sent}' -> '{phonemes}'")
             except Exception as e:
-                print(f"[WARNING] Tokenization failed for: '{sent}'. Error: {e}")
-                token_ids_list = [1]  # Use <UNK> token as fallback
+                print(f"[WARNING] Phonemization failed for: '{sent}'. Error: {e}")
+                phonemes = sent  # Fallback to the original text
+                
+            # If needed, you could split on whitespace: pretext = ' '.join(phonemes)
+            pretext = phonemes
+            cleaned = self.text_cleaner(pretext)
             
-            token_ids = torch.LongTensor(token_ids_list)
+             # Debug print for cleaned data
+            print(f"[DEBUG] After text_cleaner: {cleaned[:10]}... (showing first 10 elements)")
+            
+            # Assume text_cleaner returns a list of token IDs
+            token_ids = torch.LongTensor(cleaned)
+            
             
             # Print token IDs and try to decode them
             if len(token_ids) > 0:
@@ -285,8 +316,8 @@ class TextEncoder(nn.Module):
         
         
         phoneme_ids, attention_mask = self.tokenize(input_data)
-        print(f"[DEBUG] Phoneme IDs first example: {phoneme_ids[0].tolist()}")
-        print(f"[DEBUG] Attention mask first example: {attention_mask[0].tolist()}")
+        # print(f"[DEBUG] Phoneme IDs first example: {phoneme_ids[0].tolist()}")
+        # print(f"[DEBUG] Attention mask first example: {attention_mask[0].tolist()}")
         print(f"[DEBUG] Non-zero tokens per example: {attention_mask.sum(dim=1).tolist()}")
         print(f"[DEBUG] Max sequence length: {phoneme_ids.shape[1]}")
         print(f"[DEBUG] Padding percentage: {(1 - attention_mask.float().mean()).item()*100:.2f}%")
@@ -306,7 +337,7 @@ class TextEncoder(nn.Module):
 
         # In TextEncoder's forward method
         print(f"[DEBUG] Sample input text: '{input_data[0]}'")
-        print(f"[DEBUG] Tokenized form: {self.tokenizer.tokenize(input_data[0])}")
+        print(f"[DEBUG] Phonemized form: '{self.phonemizer(input_data[0])}'")
         print(f"[DEBUG] Token IDs shape: {phoneme_ids.shape}")
         print(f"[DEBUG] Active tokens: {attention_mask.sum(dim=1).tolist()}")
         
