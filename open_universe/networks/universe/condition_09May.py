@@ -580,8 +580,7 @@ class TextConditioner(torch.nn.Module):
         self.text_impact_factor = torch.nn.Parameter(torch.tensor(0.3))
         print("[DEBUG] FiLM + cross-attention for text conditioning ready.")
         
-        
-        self.last_attn_map = None          # NEW 03 MAY
+
         print("[DEBUG] FiLM + cross-attention for text conditioning ready.")
         
         
@@ -753,7 +752,7 @@ class TextConditioner(torch.nn.Module):
 
         ### 09 MAY UPD ##
         #  -- GA/Cover losses disabled for now ------------------------
-        self .last_attn_map = None
+        # self/last_attn_map = None
         ### 09 MAY UPD ##
                     
             
