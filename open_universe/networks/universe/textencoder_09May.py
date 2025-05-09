@@ -159,13 +159,15 @@ class TextEncoder(nn.Module):
 
 
             ids_raw = self.text_cleaner(phonemes)
-            # ── collapse consecutive duplicates ───────────────────────────────
-            ids_list = [ids_raw[0]]
-            for t in ids_raw[1:]:
-                if t != ids_list[-1]:
+            # ── keep *only the first* occurrence of every symbol ──────────────
+            seen = set()
+            ids_list = []
+            for t in ids_raw:
+                if t not in seen:
                     ids_list.append(t)
+                    seen.add(t)
             if len(ids_raw) != len(ids_list):
-                print(f"[DEBUG] dedup: {len(ids_raw)}→{len(ids_list)} tokens")
+                print(f"[DEBUG] uniq-filter: {len(ids_raw)}→{len(ids_list)} tokens")
 
 
             ids = torch.LongTensor(ids_list)
