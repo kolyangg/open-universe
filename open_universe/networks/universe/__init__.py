@@ -278,7 +278,8 @@ from .mdn import MixtureDensityNetworkLoss
 
 # 09 May version 
 # from .condition_09May import ConditionerNetwork # try POS embedding
-from .condition_09May_silmask import ConditionerNetwork # try Energy-based masking of SIL after VAD threshold
+# from .condition_09May_silmask import ConditionerNetwork # try Energy-based masking of SIL after VAD threshold
+from .condition_09May_silfix2 import ConditionerNetwork # second try to fix SIL masking
 from .universe_gan_NS_08May import UniverseGAN  # upd guid_attn loss to add masking
 from .textencoder_09May import TextEncoder
 from .score import ScoreNetwork
