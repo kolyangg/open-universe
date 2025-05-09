@@ -179,6 +179,8 @@ class TextEncoder(nn.Module):
         print(f"[DEBUG] Phonemized form: '{self.phonemizer(input_data[0])}'")
         print(f"[DEBUG] Token IDs shape: {phoneme_ids.shape}")
         print(f"[DEBUG] Active tokens: {attention_mask.sum(dim=1).tolist()}")
+        
+
                 
         outputs = self.plbert(phoneme_ids, attention_mask=attention_mask)
         # Use first token (CLS) for global embedding
