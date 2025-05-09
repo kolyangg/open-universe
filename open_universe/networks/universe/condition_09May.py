@@ -543,11 +543,11 @@ class TextConditioner(torch.nn.Module):
         
         self.attn_to_mel = torch.nn.Linear(cross_attention_dim, total_channels)
         
-        ### ADD 06 MAY - BLANK TOKEN FOR TEXT
-        # --- (1) learnable BLANK token -----------------------------------
-        self.blank_emb = torch.nn.Parameter(torch.zeros(1, 1, cross_attention_dim))
-        torch.nn.init.trunc_normal_(self.blank_emb, std=0.02)
-        ### ADD 06 MAY - BLANK TOKEN FOR TEXT
+        # ### ADD 06 MAY - BLANK TOKEN FOR TEXT
+        # # --- (1) learnable BLANK token -----------------------------------
+        # self.blank_emb = torch.nn.Parameter(torch.zeros(1, 1, cross_attention_dim))
+        # torch.nn.init.trunc_normal_(self.blank_emb, std=0.02)
+        # ### ADD 06 MAY - BLANK TOKEN FOR TEXT
         
         
         # ### ADD 04 MAY - POS EMBEDDING
@@ -558,6 +558,14 @@ class TextConditioner(torch.nn.Module):
         # )
         # torch.nn.init.trunc_normal_(self.pos_audio, std=0.02)
         # ### ADD 04 MAY - POS EMBEDDING
+
+
+        ## ADD 09 MAY ##
+        # --- learnable SIL token ------------------------------------------
+        self.sil_emb = torch.nn.Parameter(torch.zeros(1, 1, cross_attention_dim))
+        torch.nn.init.trunc_normal_(self.sil_emb, std=0.02)
+        ## ADD 09 MAY ##
+
         
         ## ADD 08 MAY ##
         # Add learnable positional embeddings for text tokens
@@ -641,7 +649,7 @@ class TextConditioner(torch.nn.Module):
         # 1) Encode text => (global_emb, seq_emb)
         # global_emb, seq_emb = self.text_encoder(text)
         
-        global_emb, seq_emb, text_key_mask = self.text_encoder(text)
+        global_emb, seq_emb, text_key_mask = self.text_encoder(text) # [B,S,C]  mask: [B,S]
         # T_text = seq_emb.size(1)
         print(f"[DEBUG] Text key mask tokens inside TE: {text_key_mask.sum(dim=1).tolist()}")
         
@@ -688,19 +696,34 @@ class TextConditioner(torch.nn.Module):
         # # self.last_attn_map = attn_map           #  [B, Q, S] – handy for logging                                                ### 03 MAY ADD
         
         
-        ### ADD 06 MAY - UPD THIS WITH BLANK TOKEN
-        # ---- (3) prepend / append BLANK token --------------------------
+        # ### ADD 06 MAY - UPD THIS WITH BLANK TOKEN
+        # # ---- (3) prepend / append BLANK token --------------------------
+        # B = seq_emb.size(0)
+        # blank = self.blank_emb.expand(B, -1, -1)
+        # seq_emb = torch.cat([blank, seq_emb, blank], 1)
+        # text_key_mask = torch.cat([torch.zeros(B,1,dtype=torch.bool,device=seq_emb.device),
+        #                            text_key_mask,
+        #                            torch.zeros(B,1,dtype=torch.bool,device=seq_emb.device)],1)
+        # ### ADD 06 MAY - UPD THIS WITH BLANK TOKEN
+
+
+
+        ## ADD 09 MAY ##
+        # ---- prepend single SIL token (un-masked) --------------------------
         B = seq_emb.size(0)
-        blank = self.blank_emb.expand(B, -1, -1)
-        seq_emb = torch.cat([blank, seq_emb, blank], 1)
-        text_key_mask = torch.cat([torch.zeros(B,1,dtype=torch.bool,device=seq_emb.device),
-                                   text_key_mask,
-                                   torch.zeros(B,1,dtype=torch.bool,device=seq_emb.device)],1)
+        sil = self.sil_emb.expand(B, -1, -1)          # [B,1,C]
+        seq_emb      = torch.cat([sil, seq_emb], 1)   # new length = S+1
+        text_key_mask = torch.cat(
+            [torch.zeros(B,1, dtype=torch.bool, device=seq_emb.device),  # False (= keep) for SIL
+             text_key_mask],
+            1)
+        ## ADD 09 MAY ##
+
         
 
         ## ADD 08 MAY - POS EMB FOR TEXT
         # Add positional embeddings to text tokens
-        seq_len = seq_emb.size(1)  # With blanks included
+        seq_len = seq_emb.size(1)  # now includes SIL
         if seq_len <= self.max_text_positions:
             # Add positional embeddings only to real tokens (not padding)
             pos_emb = self.text_pos_embed[:, :seq_len, :]
@@ -742,13 +765,22 @@ class TextConditioner(torch.nn.Module):
         else:
             self.last_q_mask = ~q_pad_mask
         
-        ## 06 MAY v2 FIX ##    
-        # ── mark real text tokens (blanks & padding = False) ───────────────
-        valid_token = ~text_key_mask.clone()      # start with regular inversion
-        valid_token[:, 0]  = False                # left blank column
-        valid_token[:, -1] = False                # right blank column
-        self.last_s_mask = valid_token            # replaces old assignment
-        ## 06 MAY v2 FIX ##   
+        # ## 06 MAY v2 FIX ##    
+        # # ── mark real text tokens (blanks & padding = False) ───────────────
+        # valid_token = ~text_key_mask.clone()      # start with regular inversion
+        # valid_token[:, 0]  = False                # left blank column
+        # valid_token[:, -1] = False                # right blank column
+        # self.last_s_mask = valid_token            # replaces old assignment
+        # ## 06 MAY v2 FIX ##   
+
+        # # real tokens = not padding (we no longer have blanks)
+        # self.last_s_mask = ~text_key_mask
+
+
+        # real tokens = not padding and not the SIL column (idx 0)
+        valid = ~text_key_mask.clone()
+        valid[:, 0] = False                      # exclude SIL from GA bookkeeping
+        self.last_s_mask = valid
 
         ### 09 MAY UPD ##
         #  -- GA/Cover losses disabled for now ------------------------
