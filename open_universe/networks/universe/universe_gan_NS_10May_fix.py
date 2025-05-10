@@ -401,37 +401,68 @@ class UniverseGAN(Universe):
         # ---------------------------
         use_text = any(t.strip() for t in text_str_list)
         if use_text:
-            # "new" text approach with debug prints
-            result = self.condition_model(mix, text=text_str_list, train=True, mask = mask) ### 01 MAY: added mask
-            if len(result) == 4:
-                cond, y_est, _, text_metrics = result
-                # Log text debug metrics just like in new code
-                for k, v in text_metrics.items():
-                    if isinstance(v, (int, float)):
-                        self.log(f"text_checks/{k}", v, batch_size=mix.shape[0], **self.log_kwargs)
-                    elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
-                        for i, pos in enumerate(v):
-                            self.log(f"text_checks/top_attended_{i}", pos, batch_size=mix.shape[0], **self.log_kwargs)
+            # # "new" text approach with debug prints
+            # result = self.condition_model(mix, text=text_str_list, train=True, mask = mask) ### 01 MAY: added mask
+            # if len(result) == 4:
+            #     cond, y_est, _, text_metrics = result
+            #     # Log text debug metrics just like in new code
+            #     for k, v in text_metrics.items():
+            #         if isinstance(v, (int, float)):
+            #             self.log(f"text_checks/{k}", v, batch_size=mix.shape[0], **self.log_kwargs)
+            #         elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
+            #             for i, pos in enumerate(v):
+            #                 self.log(f"text_checks/top_attended_{i}", pos, batch_size=mix.shape[0], **self.log_kwargs)
             
-            elif len(result) == 5:
-                cond, y_est, _, text_metrics1, text_metrics2 = result
-                # Log text debug metrics just like in new code
-                for k, v in text_metrics1.items():
-                    if isinstance(v, (int, float)):
-                        self.log(f"text_checks1/{k}", v, batch_size=mix.shape[0], **self.log_kwargs)
-                    elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
-                        for i, pos in enumerate(v):
-                            self.log(f"text_checks1/top_attended_{i}", pos, batch_size=mix.shape[0], **self.log_kwargs)
+            # elif len(result) == 5:
+            #     cond, y_est, _, text_metrics1, text_metrics2 = result
+            #     # Log text debug metrics just like in new code
+            #     for k, v in text_metrics1.items():
+            #         if isinstance(v, (int, float)):
+            #             self.log(f"text_checks1/{k}", v, batch_size=mix.shape[0], **self.log_kwargs)
+            #         elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
+            #             for i, pos in enumerate(v):
+            #                 self.log(f"text_checks1/top_attended_{i}", pos, batch_size=mix.shape[0], **self.log_kwargs)
                 
-                for k, v in text_metrics2.items():
+            #     for k, v in text_metrics2.items():
+            #         if isinstance(v, (int, float)):
+            #             self.log(f"text_checks2/{k}", v, batch_size=mix.shape[0], **self.log_kwargs)
+            #         elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
+            #             for i, pos in enumerate(v):
+            #                 self.log(f"text_checks2/top_attended_{i}", pos, batch_size=mix.shape[0], **self.log_kwargs)
+            # else:
+            #     cond, y_est, _ = result
+            # # print("[DEBUG] Text-based conditioning active in training_step.")
+            
+            
+            ### UPD 10 MAY ###
+            
+            # ——————————————————————————————————————————
+            # NEW Return-layout: (cond, y_est, h, text_metrics)
+            # text_metrics = {"mel": {…}, "lat": {…}}
+            # ——————————————————————————————————————————
+            cond, y_est, _, text_metrics = self.condition_model(
+                mix, text=text_str_list, train=True, mask=mask
+            )
+
+            def _log_metrics(level: str, metrics: dict):
+                for k, v in metrics.items():
+                    tag = f"text_{level}/{k}"
                     if isinstance(v, (int, float)):
-                        self.log(f"text_checks2/{k}", v, batch_size=mix.shape[0], **self.log_kwargs)
+                        self.log(tag, v, batch_size=mix.shape[0], **self.log_kwargs)
                     elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
                         for i, pos in enumerate(v):
-                            self.log(f"text_checks2/top_attended_{i}", pos, batch_size=mix.shape[0], **self.log_kwargs)
-            else:
-                cond, y_est, _ = result
-            # print("[DEBUG] Text-based conditioning active in training_step.")
+                            self.log(f"{tag}_{i}", pos, batch_size=mix.shape[0], **self.log_kwargs)
+
+            if isinstance(text_metrics, dict):
+                if "mel" in text_metrics:
+                    _log_metrics("mel", text_metrics["mel"])
+                if "lat" in text_metrics:
+                    _log_metrics("lat", text_metrics["lat"])
+            # ------------------------------------------------------------------
+            
+            ### UPD 10 MAY ###
+            
+            
         else:
             # old code: just call condition_model with no text
             # cond, y_est, _ = self.condition_model(mix, train=True, mask = mask) ### 01 MAY: added mask
