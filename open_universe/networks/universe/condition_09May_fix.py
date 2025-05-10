@@ -1025,6 +1025,7 @@ class ConditionerNetwork(torch.nn.Module):
         if use_text:
             # Call the new TextConditioner class
             # x_mel, text_metrics = self.text_conditioner(x_mel, text, mel_pad_mask) ### 01 MAY ADD
+            x_mel, text_metrics = self.text_conditioner(x_mel, text) ## 10 MAY upd fix
             print("[DEBUG] Use text iS TRUE")
         else:
             # old path => do nothing special, x_mel remains as is
@@ -1060,13 +1061,13 @@ class ConditionerNetwork(torch.nn.Module):
         
         
         # ##### TextConditioner - right at end of ConditionerEncoder (right after it) #####
-        # if use_text:
-        #     # Call the new TextConditioner class
-        #     # h, text_metrics = self.text_conditioner(h, text)
+        if use_text:
+            # Call the new TextConditioner class
+            h, text_metrics = self.text_conditioner(h, text)
         #     h, text_metrics = self.text_conditioner(h, text, q_pad_mask)    ### 01 MAY ADD
-        # else:
-        #     # old path => do nothing special, x_mel remains as is
-        #     print("[DEBUG] No text => old conditioning path in condition_plbert.")
+        else:
+            # old path => do nothing special, x_mel remains as is
+            print("[DEBUG] No text => old conditioning path in condition_plbert.")
         # ##### TextConditioner - right at end of ConditionerEncoder (right after it) #####
         
         
