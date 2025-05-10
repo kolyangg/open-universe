@@ -343,7 +343,7 @@ class ConditionerNetwork(torch.nn.Module):
 
         self.precoding = instantiate(precoding, _recursive_=True) if precoding else None
 
-    def forward(self, x, x_wav=None, train=False):
+    def forward(self, x, x_wav=None, train=False, text = None, mask = None):
         n_samples = x.shape[-1]
 
         if x_wav is None:
