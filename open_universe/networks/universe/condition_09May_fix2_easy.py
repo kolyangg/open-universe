@@ -577,21 +577,21 @@ class TextConditioner(torch.nn.Module):
         # ### ADD 04 MAY - POS EMBEDDING
 
 
-        ## ADD 09 MAY ##
-        # --- learnable SIL token ------------------------------------------
-        self.sil_emb = torch.nn.Parameter(torch.zeros(1, 1, cross_attention_dim))
-        torch.nn.init.trunc_normal_(self.sil_emb, std=0.02)
-        ## ADD 09 MAY ##
+        # ## ADD 09 MAY ##
+        # # --- learnable SIL token ------------------------------------------
+        # self.sil_emb = torch.nn.Parameter(torch.zeros(1, 1, cross_attention_dim))
+        # torch.nn.init.trunc_normal_(self.sil_emb, std=0.02)
+        # ## ADD 09 MAY ##
 
         
-        ## ADD 08 MAY ##
-        # Add learnable positional embeddings for text tokens
-        self.max_text_positions = 256  # Maximum number of text tokens to support
-        self.text_pos_embed = torch.nn.Parameter(
-        torch.zeros(1, self.max_text_positions, cross_attention_dim)
-            )
-        torch.nn.init.trunc_normal_(self.text_pos_embed, std=0.02)
-        ## ADD 08 MAY ##
+        # ## ADD 08 MAY ##
+        # # Add learnable positional embeddings for text tokens
+        # self.max_text_positions = 256  # Maximum number of text tokens to support
+        # self.text_pos_embed = torch.nn.Parameter(
+        # torch.zeros(1, self.max_text_positions, cross_attention_dim)
+        #     )
+        # torch.nn.init.trunc_normal_(self.text_pos_embed, std=0.02)
+        # ## ADD 08 MAY ##
 
         
 
@@ -627,31 +627,31 @@ class TextConditioner(torch.nn.Module):
 
     ### UPD 8 MAY - IMRPOVE ROPE
     # ---- (2) Rotary Positional Embedding  --------------------------
-    @staticmethod
-    def _rope(t, base=10000):
-        # Enhanced RoPE with better frequency allocation
-        # t : [B,T,C] (C even)
-        d = t.shape[-1]
-        half = t[..., :d//2], t[..., d//2:]
+    # @staticmethod
+    # def _rope(t, base=10000):
+    #     # Enhanced RoPE with better frequency allocation
+    #     # t : [B,T,C] (C even)
+    #     d = t.shape[-1]
+    #     half = t[..., :d//2], t[..., d//2:]
         
-        # Use log-spaced frequencies for better representation
-        dim_t = torch.arange(0, d//2, device=t.device)
-        inv_freq = 1.0 / (base ** (dim_t / (d//2)))
+    #     # Use log-spaced frequencies for better representation
+    #     dim_t = torch.arange(0, d//2, device=t.device)
+    #     inv_freq = 1.0 / (base ** (dim_t / (d//2)))
         
-        # Generate position-dependent rotation
-        seq_len = t.shape[1]
-        pos = torch.arange(seq_len, device=t.device).float().unsqueeze(1)  # [T, 1]
+    #     # Generate position-dependent rotation
+    #     seq_len = t.shape[1]
+    #     pos = torch.arange(seq_len, device=t.device).float().unsqueeze(1)  # [T, 1]
         
-        # Compute angles
-        angles = pos * inv_freq.unsqueeze(0)  # [T, d//2]
-        sin, cos = angles.sin().unsqueeze(0), angles.cos().unsqueeze(0)  # [1, T, d//2]
+    #     # Compute angles
+    #     angles = pos * inv_freq.unsqueeze(0)  # [T, d//2]
+    #     sin, cos = angles.sin().unsqueeze(0), angles.cos().unsqueeze(0)  # [1, T, d//2]
         
-        # Apply rotation
-        return torch.cat([
-            half[0] * cos - half[1] * sin,
-            half[0] * sin + half[1] * cos
-        ], dim=-1)
-    ### UPD 8 MAY - IMRPOVE ROPE
+    #     # Apply rotation
+    #     return torch.cat([
+    #         half[0] * cos - half[1] * sin,
+    #         half[0] * sin + half[1] * cos
+    #     ], dim=-1)
+    # ### UPD 8 MAY - IMRPOVE ROPE
         
 
     def forward(self, x_mel, text, q_pad_mask=None): ### 01 MAY: ADD MASK
@@ -698,7 +698,7 @@ class TextConditioner(torch.nn.Module):
         ### ADD 06 MAY - ROPE POS EMBEDDING
 
 
-        x_mel_attn = self._rope(x_mel_attn)
+        # x_mel_attn = self._rope(x_mel_attn)
         ### ADD 06 MAY - ROPE POS EMBEDDING
         
         
@@ -726,35 +726,35 @@ class TextConditioner(torch.nn.Module):
 
 
 
-        ## ADD 09 MAY ##
-        # ---- prepend single SIL token (un-masked) --------------------------
-        B = seq_emb.size(0)
-        sil = self.sil_emb.expand(B, -1, -1)          # [B,1,C]
-        seq_emb      = torch.cat([sil, seq_emb], 1)   # new length = S+1
-        text_key_mask = torch.cat(
-            [torch.zeros(B,1, dtype=torch.bool, device=seq_emb.device),  # False (= keep) for SIL
-             text_key_mask],
-            1)
-        ## ADD 09 MAY ##
+        # ## ADD 09 MAY ##
+        # # ---- prepend single SIL token (un-masked) --------------------------
+        # B = seq_emb.size(0)
+        # sil = self.sil_emb.expand(B, -1, -1)          # [B,1,C]
+        # seq_emb      = torch.cat([sil, seq_emb], 1)   # new length = S+1
+        # text_key_mask = torch.cat(
+        #     [torch.zeros(B,1, dtype=torch.bool, device=seq_emb.device),  # False (= keep) for SIL
+        #      text_key_mask],
+        #     1)
+        # ## ADD 09 MAY ##
 
         
 
-        ## ADD 08 MAY - POS EMB FOR TEXT
-        # Add positional embeddings to text tokens
-        seq_len = seq_emb.size(1)  # now includes SIL
-        if seq_len <= self.max_text_positions:
-            # Add positional embeddings only to real tokens (not padding)
-            pos_emb = self.text_pos_embed[:, :seq_len, :]
-            # Apply only to valid tokens (including blanks which are marked valid)
-            seq_emb = seq_emb + pos_emb * (~text_key_mask).unsqueeze(-1).float()
-        else:
-           # Handle case where sequence exceeds max positions
-            pos_emb = self.text_pos_embed[:, :self.max_text_positions, :]
-            seq_emb[:, :self.max_text_positions, :] = (
-                seq_emb[:, :self.max_text_positions, :] + 
-                pos_emb * (~text_key_mask[:, :self.max_text_positions]).unsqueeze(-1).float()
-            )
-        ## ADD 08 MAY - POS EMB FOR TEXT
+        # ## ADD 08 MAY - POS EMB FOR TEXT
+        # # Add positional embeddings to text tokens
+        # seq_len = seq_emb.size(1)  # now includes SIL
+        # if seq_len <= self.max_text_positions:
+        #     # Add positional embeddings only to real tokens (not padding)
+        #     pos_emb = self.text_pos_embed[:, :seq_len, :]
+        #     # Apply only to valid tokens (including blanks which are marked valid)
+        #     seq_emb = seq_emb + pos_emb * (~text_key_mask).unsqueeze(-1).float()
+        # else:
+        #    # Handle case where sequence exceeds max positions
+        #     pos_emb = self.text_pos_embed[:, :self.max_text_positions, :]
+        #     seq_emb[:, :self.max_text_positions, :] = (
+        #         seq_emb[:, :self.max_text_positions, :] + 
+        #         pos_emb * (~text_key_mask[:, :self.max_text_positions]).unsqueeze(-1).float()
+        #     )
+        # ## ADD 08 MAY - POS EMB FOR TEXT
 
 
         # ---- (4) zero padded queries to avoid bleed --------------------
@@ -828,8 +828,10 @@ class TextConditioner(torch.nn.Module):
         x_mel_conditioned = x_mel_t.transpose(1,2) / x_mel_norm.clamp(min=1e-5)
 
         # 5) Blend with text_impact_factor
-        blend_factor = torch.sigmoid(self.text_impact_factor)
-        print(f"[DEBUG] blend_factor={blend_factor.item():.4f}")
+        # blend_factor = torch.sigmoid(self.text_impact_factor)
+        # print(f"[DEBUG] blend_factor={blend_factor.item():.4f}")
+        blend_factor = 1.0
+        print(f"[DEBUG] blend_factor={blend_factor:.4f}")
         x_mel = (1.0 - blend_factor) * x_mel_orig + blend_factor * x_mel_conditioned
 
         # match magnitude
@@ -837,7 +839,8 @@ class TextConditioner(torch.nn.Module):
         old_norm = x_mel_orig.norm(dim=1, keepdim=True)
         x_mel = x_mel * (old_norm / new_norm.clamp(min=1e-8))
 
-        text_metrics["blend_factor"] = blend_factor.item()
+        # text_metrics["blend_factor"] = blend_factor.item()
+        text_metrics["blend_factor"] = blend_factor
         text_metrics["mel_features_before"] = x_mel_orig.abs().mean().item()
         text_metrics["mel_features_after"] = x_mel.abs().mean().item()
         text_metrics["feature_difference"] = (x_mel - x_mel_orig).abs().mean().item()
