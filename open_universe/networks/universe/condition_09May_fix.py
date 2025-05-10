@@ -1006,25 +1006,25 @@ class ConditionerNetwork(torch.nn.Module):
         
         
             
-        ##### 01 May add    
-        if mask is not None:
-            L_in, L_mel = mask.shape[-1], x_mel.shape[-1]          # wav vs Mel length
-            f_mel = math.ceil(L_in / L_mel)                        # robust ratio
-            mel_pad_mask = (torch.nn.functional.avg_pool1d(mask.unsqueeze(1).float(),
-                                        kernel_size=f_mel,
-                                        stride=f_mel,
-                                        ceil_mode=True)           # keep tail
-                            .squeeze(1) < 0.5)                   # True → padded
-            mel_pad_mask = mel_pad_mask[..., :L_mel]               # trim excess
-        else:
-            mel_pad_mask = None
-        ##### 01 May add    
+        # ##### 01 May add    
+        # if mask is not None:
+        #     L_in, L_mel = mask.shape[-1], x_mel.shape[-1]          # wav vs Mel length
+        #     f_mel = math.ceil(L_in / L_mel)                        # robust ratio
+        #     mel_pad_mask = (torch.nn.functional.avg_pool1d(mask.unsqueeze(1).float(),
+        #                                 kernel_size=f_mel,
+        #                                 stride=f_mel,
+        #                                 ceil_mode=True)           # keep tail
+        #                     .squeeze(1) < 0.5)                   # True → padded
+        #     mel_pad_mask = mel_pad_mask[..., :L_mel]               # trim excess
+        # else:
+        #     mel_pad_mask = None
+        # ##### 01 May add    
         
         
         ##### TextConditioner - right after MelAdapter ##### 01 MAY ADD (second)
         if use_text:
             # Call the new TextConditioner class
-            x_mel, text_metrics = self.text_conditioner(x_mel, text, mel_pad_mask) ### 01 MAY ADD
+            # x_mel, text_metrics = self.text_conditioner(x_mel, text, mel_pad_mask) ### 01 MAY ADD
             print("[DEBUG] Use text iS TRUE")
         else:
             # old path => do nothing special, x_mel remains as is
@@ -1039,35 +1039,35 @@ class ConditionerNetwork(torch.nn.Module):
         x = self.input_conv(x)
         h, lengths = self.encoder(x, x_mel) # latent representation
         
-        #### 01 May add
+        # #### 01 May add
 
-        if mask is not None:
-            # --- robust down-sampling -----------------------------------------
-            L_in, L_lat = mask.shape[-1], h.shape[-1]
-            factor = math.ceil(L_in / L_lat)                 # ← use CEIL not //
-            q_pad_mask = (torch.nn.functional.avg_pool1d(
-                            mask.unsqueeze(1).float(),
-                            kernel_size=factor,
-                            stride=factor,
-                            ceil_mode=True)                # keep last partial window
-                        .squeeze(1) < 0.5)                 # bool: True = pad
-            q_pad_mask = q_pad_mask[..., :L_lat]             # trim any extra frame
-        else:
-            q_pad_mask = None    
+        # if mask is not None:
+        #     # --- robust down-sampling -----------------------------------------
+        #     L_in, L_lat = mask.shape[-1], h.shape[-1]
+        #     factor = math.ceil(L_in / L_lat)                 # ← use CEIL not //
+        #     q_pad_mask = (torch.nn.functional.avg_pool1d(
+        #                     mask.unsqueeze(1).float(),
+        #                     kernel_size=factor,
+        #                     stride=factor,
+        #                     ceil_mode=True)                # keep last partial window
+        #                 .squeeze(1) < 0.5)                 # bool: True = pad
+        #     q_pad_mask = q_pad_mask[..., :L_lat]             # trim any extra frame
+        # else:
+        #     q_pad_mask = None    
         
-        #### 01 May add
+        # #### 01 May add
         
         
         
-        ##### TextConditioner - right at end of ConditionerEncoder (right after it) #####
-        if use_text:
-            # Call the new TextConditioner class
-            # h, text_metrics = self.text_conditioner(h, text)
-            h, text_metrics = self.text_conditioner(h, text, q_pad_mask)    ### 01 MAY ADD
-        else:
-            # old path => do nothing special, x_mel remains as is
-            print("[DEBUG] No text => old conditioning path in condition_plbert.")
-        ##### TextConditioner - right at end of ConditionerEncoder (right after it) #####
+        # ##### TextConditioner - right at end of ConditionerEncoder (right after it) #####
+        # if use_text:
+        #     # Call the new TextConditioner class
+        #     # h, text_metrics = self.text_conditioner(h, text)
+        #     h, text_metrics = self.text_conditioner(h, text, q_pad_mask)    ### 01 MAY ADD
+        # else:
+        #     # old path => do nothing special, x_mel remains as is
+        #     print("[DEBUG] No text => old conditioning path in condition_plbert.")
+        # ##### TextConditioner - right at end of ConditionerEncoder (right after it) #####
         
         
         y_hat, conditions = self.decoder(h, lengths)
