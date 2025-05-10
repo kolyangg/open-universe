@@ -286,23 +286,23 @@ from .mdn import MixtureDensityNetworkLoss
 
 
 
-# 10 May - testing vs old ver again 
-# from .condition_09May import ConditionerNetwork # try POS embedding
-from .condition_09May_fix import ConditionerNetwork # try POS embedding
-# from .condition_09May_silmask import ConditionerNetwork # try Energy-based masking of SIL after VAD threshold
-# from .condition_09May_silfix2 import ConditionerNetwork # second try to fix SIL masking
-# from .condition_orig_masked import ConditionerNetwork # second try to fix SIL masking
-from .universe_gan_NS_08May import UniverseGAN  # upd guid_attn loss to add masking
-from .textencoder_09May import TextEncoder
-from .score import ScoreNetwork
-
-
-# # 10 May - EASY TEXTENCODER FOR DEBUGGING
-# from .condition_10May_easy import ConditionerNetwork # second try to fix SIL masking
+# # 10 May - testing vs old ver again 
+# # from .condition_09May import ConditionerNetwork # try POS embedding
+# from .condition_09May_fix import ConditionerNetwork # try POS embedding
+# # from .condition_09May_silmask import ConditionerNetwork # try Energy-based masking of SIL after VAD threshold
+# # from .condition_09May_silfix2 import ConditionerNetwork # second try to fix SIL masking
+# # from .condition_orig_masked import ConditionerNetwork # second try to fix SIL masking
 # from .universe_gan_NS_08May import UniverseGAN  # upd guid_attn loss to add masking
-# from .textencoder_10May_easy import TextEncoder
+# from .textencoder_09May import TextEncoder
 # from .score import ScoreNetwork
-# # 10 May - EASY TEXTENCODER FOR DEBUGGING
+
+
+# 10 May - EASY TEXTENCODER FOR DEBUGGING
+from .condition_10May_easy import ConditionerNetwork # second try to fix SIL masking
+from .universe_gan_NS_08May import UniverseGAN  # upd guid_attn loss to add masking
+from .textencoder_10May_easy import TextEncoder
+from .score import ScoreNetwork
+# 10 May - EASY TEXTENCODER FOR DEBUGGING
 
 
 
