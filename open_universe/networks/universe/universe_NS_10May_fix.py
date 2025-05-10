@@ -942,30 +942,49 @@ class Universe(pl.LightningModule):
                 est = est * mask_.unsqueeze(1)
                 target_ = target_ * mask_.unsqueeze(1)
             
-            # Log validation text metrics
-            if self.have_text and hasattr(self, 'text_metrics') and self.text_metrics:
-                for k, v in self.text_metrics.items():
-                    if isinstance(v, (int, float)):
-                        self.log(f"val_text_checks/{k}", v, on_epoch=True, sync_dist=True, batch_size=batch_size)
-                    elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
-                        for i, pos in enumerate(v):
-                            self.log(f"val_text_checks/top_attended_{i}", pos, on_epoch=True, sync_dist=True, batch_size=batch_size)
+            # # Log validation text metrics
+            # if self.have_text and hasattr(self, 'text_metrics') and self.text_metrics:
+            #     for k, v in self.text_metrics.items():
+            #         if isinstance(v, (int, float)):
+            #             self.log(f"val_text_checks/{k}", v, on_epoch=True, sync_dist=True, batch_size=batch_size)
+            #         elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
+            #             for i, pos in enumerate(v):
+            #                 self.log(f"val_text_checks/top_attended_{i}", pos, on_epoch=True, sync_dist=True, batch_size=batch_size)
             
-            if self.have_text and hasattr(self, 'text_metrics1') and self.text_metrics1:
-                for k, v in self.text_metrics1.items():
-                    if isinstance(v, (int, float)):
-                        self.log(f"val_text_checks1/{k}", v, on_epoch=True, sync_dist=True, batch_size=batch_size)
-                    elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
-                        for i, pos in enumerate(v):
-                            self.log(f"val_text_checks1/top_attended_{i}", pos, on_epoch=True, sync_dist=True, batch_size=batch_size)
+            # if self.have_text and hasattr(self, 'text_metrics1') and self.text_metrics1:
+            #     for k, v in self.text_metrics1.items():
+            #         if isinstance(v, (int, float)):
+            #             self.log(f"val_text_checks1/{k}", v, on_epoch=True, sync_dist=True, batch_size=batch_size)
+            #         elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
+            #             for i, pos in enumerate(v):
+            #                 self.log(f"val_text_checks1/top_attended_{i}", pos, on_epoch=True, sync_dist=True, batch_size=batch_size)
             
-            if self.have_text and hasattr(self, 'text_metrics2') and self.text_metrics2:
-                for k, v in self.text_metrics2.items():
-                    if isinstance(v, (int, float)):
-                        self.log(f"val_text_checks2/{k}", v, on_epoch=True, sync_dist=True, batch_size=batch_size)
-                    elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
-                        for i, pos in enumerate(v):
-                            self.log(f"val_text_checks2/top_attended_{i}", pos, on_epoch=True, sync_dist=True, batch_size=batch_size)
+            # if self.have_text and hasattr(self, 'text_metrics2') and self.text_metrics2:
+            #     for k, v in self.text_metrics2.items():
+            #         if isinstance(v, (int, float)):
+            #             self.log(f"val_text_checks2/{k}", v, on_epoch=True, sync_dist=True, batch_size=batch_size)
+            #         elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
+            #             for i, pos in enumerate(v):
+            #                 self.log(f"val_text_checks2/top_attended_{i}", pos, on_epoch=True, sync_dist=True, batch_size=batch_size)
+            
+            
+            ## UPD 10 MAY ##
+            # ---- Log validation text metrics for MEL and LATENT conditioners ----
+            if self.have_text and getattr(self, "text_metrics", None):
+                def _log_metrics(level: str, metrics: dict):
+                    for k, v in metrics.items():
+                        tag = f"val_text_{level}/{k}"
+                        if isinstance(v, (int, float)):
+                            self.log(tag, v, on_epoch=True, sync_dist=True, batch_size=batch_size)
+                        elif isinstance(v, list) and k == "top_attended_positions" and len(v) <= 5:
+                            for i, pos in enumerate(v):
+                                self.log(f"{tag}_{i}", pos, on_epoch=True, sync_dist=True, batch_size=batch_size)
+
+                if "mel" in self.text_metrics:
+                    _log_metrics("mel", self.text_metrics["mel"])
+                if "lat" in self.text_metrics:
+                    _log_metrics("lat", self.text_metrics["lat"])
+            ## UPD 10 MAY ##
 
             # log val losses
             for name, loss in self.enh_losses.items():
