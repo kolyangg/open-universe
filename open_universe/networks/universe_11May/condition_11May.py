@@ -339,7 +339,10 @@ class CrossAttentionBlock(torch.nn.Module):
 
         # q, k = x, cond # UPD 9 MAY - remove scaling
         scale = 1.0 / self.temperature
-        q, k = x * scale, cond * scale
+        # q, k = x * scale, cond * scale
+        
+        q = x * scale
+        k = cond                # leave keys / values untouched
 
 
         attn_out, attn_weights = self.cross_attn(
@@ -836,6 +839,7 @@ class ConditionerNetwork(torch.nn.Module):
                 total_channels,
                 num_heads=cross_attention_num_heads or max(1, cross_attention_dim // 64),
                 attention_temperature=attention_temperature,
+                text_encoder = self.text_encoder,
             )
 
         
@@ -854,6 +858,7 @@ class ConditionerNetwork(torch.nn.Module):
                     total_channels,
                     num_heads=cross_attention_num_heads or max(1, cross_attention_dim // 64),
                     attention_temperature=attention_temperature,
+                    text_encoder = self.text_encoder,
                 )
                 self.lat_film = None
             elif self.lat_mode == "film":
