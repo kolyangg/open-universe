@@ -307,14 +307,19 @@ from .mdn import MixtureDensityNetworkLoss
 # # 10 May - EASY TEXTENCODER FOR DEBUGGING
 
 
-# 10 May - EASY TEXTENCODER v2 FOR DEBUGGING
-from .condition_09May_fix2_easy import ConditionerNetwork # second try to fix SIL masking
-from .universe_gan_NS_10May_fix import UniverseGAN  # upd guid_attn loss to add masking
-from .textencoder_10May_easy import TextEncoder
+# # 10 May - EASY TEXTENCODER v2 FOR DEBUGGING
+# from .condition_09May_fix2_easy import ConditionerNetwork # second try to fix SIL masking
+# from .universe_gan_NS_10May_fix import UniverseGAN  # upd guid_attn loss to add masking
+# from .textencoder_10May_easy import TextEncoder
+# from .score import ScoreNetwork
+# # 10 May - EASY TEXTENCODER FOR DEBUGGING
+
+## 11 May - updated ver (cross-attn only on Mel + FILM on latent)
+from .condition_11May import ConditionerNetwork # second try to fix SIL masking
+from .universe_gan_NS_11May import UniverseGAN  # upd guid_attn loss to add masking
+from .textencoder_11May import TextEncoder
 from .score import ScoreNetwork
-# 10 May - EASY TEXTENCODER FOR DEBUGGING
-
-
+## 11 May - updated ver (cross-attn only on Mel + FILM on latent)
 
 
 
