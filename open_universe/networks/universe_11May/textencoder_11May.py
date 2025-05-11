@@ -158,18 +158,20 @@ class TextEncoder(nn.Module):
             # ids_list = self.text_cleaner(phonemes)
 
 
-            ids_raw = self.text_cleaner(phonemes)
-            # ── keep *only the first* occurrence of every symbol ──────────────
-            seen = set()
-            ids_list = []
-            for t in ids_raw:
-                if t not in seen:
-                    ids_list.append(t)
-                    seen.add(t)
-            if len(ids_raw) != len(ids_list):
-                print(f"[DEBUG] uniq-filter: {len(ids_raw)}→{len(ids_list)} tokens")
-
-
+            # KEEP ONLY THE FIRST OCCURRENCE OF EVERY SYMBOL - REMOVED
+            # ids_raw = self.text_cleaner(phonemes)
+            # # ── keep *only the first* occurrence of every symbol ──────────────
+            # seen = set()
+            # ids_list = []
+            # for t in ids_raw:
+            #     if t not in seen:
+            #         ids_list.append(t)
+            #         seen.add(t)
+            # if len(ids_raw) != len(ids_list):
+            #     print(f"[DEBUG] uniq-filter: {len(ids_raw)}→{len(ids_list)} tokens")
+            
+            
+            ids_list = self.text_cleaner(phonemes)
             ids = torch.LongTensor(ids_list)
 
             # Debug prints ---------------------------------------------------------

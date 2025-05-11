@@ -334,12 +334,12 @@ class CrossAttentionBlock(torch.nn.Module):
     def forward(self, x, cond, x_mask=None, cond_mask=None):
         text_metrics = {}
         
-
-
-
         # q, k = x, cond # UPD 9 MAY - remove scaling
         scale = 1.0 / self.temperature
-        q, k = x * scale, cond * scale
+        # q, k = x * scale, cond * scale
+        
+        q = x * scale            # sharpen / soften queries
+        k = cond                 # keep keys / values unchanged
 
 
         attn_out, attn_weights = self.cross_attn(
@@ -521,6 +521,8 @@ class TextConditioner(torch.nn.Module):
         # Re-use a shared encoder if one is passed in
         if text_encoder is not None:
             self.text_encoder = text_encoder
+            shared_encoder   = instantiate(text_encoder_config, _recursive_=False)
+            self.text_encoder = shared_encoder
         else:
             self.text_encoder = instantiate(text_encoder_config, _recursive_=False)
         
@@ -635,6 +637,10 @@ class TextConditioner(torch.nn.Module):
 
 
         x_mel_attn = self._rope(x_mel_attn)
+        
+        
+        # apply the *same* rotary embedding to keys / values
+        seq_emb    = self._rope(seq_emb)
         ### ADD 06 MAY - ROPE POS EMBEDDING
         
         
@@ -827,13 +833,15 @@ class ConditionerNetwork(torch.nn.Module):
             self.lat_mode = lat_conditioning.lower()
             print(f"[DEBUG] Text conditioning modes: mel={self.mel_mode}, lat={self.lat_mode}")
 
-            shared_encoder_cfg = text_encoder_config
-            self.text_encoder  = (
-                instantiate(shared_encoder_cfg, _recursive_=False)
-                if (shared_encoder_cfg is not None
-                    and ("film" in (self.mel_mode, self.lat_mode)))
-                else None
-            )
+            # shared_encoder_cfg = text_encoder_config
+            # self.text_encoder  = (
+            #     instantiate(shared_encoder_cfg, _recursive_=False)
+            #     if (shared_encoder_cfg is not None
+            #         and ("film" in (self.mel_mode, self.lat_mode)))
+            #     else None
+            # )
+            
+            shared_encoder_cfg = text_encoder_config  # just keep the cfg
  
 
             
@@ -859,13 +867,17 @@ class ConditionerNetwork(torch.nn.Module):
                 self.mel_film      = None
 
             # -------- LATENT level -----------------------------------------------
+                
             if self.lat_mode == "full":
+                # re-use the *same* PL-BERT instance created above
                 self.text_cond_lat = TextConditioner(
                     shared_encoder_cfg, film_global_dim, cross_attention_dim,
                     total_channels,
                     num_heads=cross_attention_num_heads or max(1, cross_attention_dim // 64),
                     attention_temperature=attention_temperature,
+                    text_encoder=self.text_encoder,   # <-- share weights / memory
                 )
+
                 self.lat_film = None
             elif self.lat_mode == "film":
                 self.text_cond_lat = None
