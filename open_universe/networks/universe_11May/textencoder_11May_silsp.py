@@ -78,8 +78,29 @@ class TextEncoder(nn.Module):
         self.text_cleaner = TextCleaner()
         self.phonemizer = OpenPhonemizer()
 
-        # keep the id of the plain-space symbol for masking later
+        # # keep the id of the plain-space symbol for masking later
+        # self.space_id = self.text_cleaner.word_index_dictionary[" "]
+        
+        ## 12 MAY - ADDING SILENCE TOKEN
+        # ─────── special symbols ───────────────────────────────────────
         self.space_id = self.text_cleaner.word_index_dictionary[" "]
+        # new dedicated silence token
+        if "<sil>" not in self.text_cleaner.word_index_dictionary:
+            self.sil_id = max(self.text_cleaner.word_index_dictionary.values()) + 1
+            self.text_cleaner.word_index_dictionary["<sil>"] = self.sil_id
+        else:
+            self.sil_id = self.text_cleaner.word_index_dictionary["<sil>"]
+            
+        # ── make sure PL-BERT can look this ID up --------------------------
+        # (resize only if needed – keeps checkpoint weights intact)
+        vocab_needed = self.sil_id + 1          # highest ID is inclusive
+        if vocab_needed > self.plbert.config.vocab_size:
+            print(f"[DEBUG] Expanding PL-BERT vocab {self.plbert.config.vocab_size}"
+                  f" → {vocab_needed} to accommodate <sil>")
+            self.plbert.resize_token_embeddings(vocab_needed)    
+                    
+        ## 12 MAY - ADDING SILENCE TOKEN
+
 
         # Build reverse symbol lookup for **debug prints only** ---------------------
         self.id2symbol: dict[int, str] | None = {
@@ -174,6 +195,13 @@ class TextEncoder(nn.Module):
             
             
             ids_list = self.text_cleaner(phonemes)
+            
+            ### 12 MAY - ADDING SILENCE TOKEN
+            # prepend <sil> so every sequence starts with an anchor
+            ids_list = [self.sil_id] + ids_list
+            ### 12 MAY - ADDING SILENCE TOKEN
+            
+            
             ids = torch.LongTensor(ids_list)
 
             # Debug prints ---------------------------------------------------------
@@ -226,8 +254,15 @@ class TextEncoder(nn.Module):
         #   – pad       -> True  (already 1 in attention_mask)
         #   – space id  -> True  (new)
         
-        # build key-mask  (pad OR space)  →  True == “ignore”
-        key_mask = (attention_mask == 0) | (phoneme_ids == self.space_id)
+        # # build key-mask  (pad OR space)  →  True == “ignore”
+        # key_mask = (attention_mask == 0) | (phoneme_ids == self.space_id)
+        
+        ## 12 MAY - ADDING SILENCE TOKEN
+        # build key-mask: ignore PAD **and the new <sil> token** only
+        key_mask = (attention_mask == 0) | (phoneme_ids == self.sil_id)
+        ## 12 MAY - ADDING SILENCE TOKEN
+        
+        
         # zero-out values of ignored tokens so they cannot dominate attention
         seq_emb = seq_emb.masked_fill(key_mask.unsqueeze(-1), 0.0)
 

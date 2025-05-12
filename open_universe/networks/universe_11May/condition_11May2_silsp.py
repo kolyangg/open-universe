@@ -681,8 +681,15 @@ class TextConditioner(torch.nn.Module):
         # self.last_s_mask = valid
         
         
-        self.last_s_mask = ~text_key_mask       # we no longer prepend <SIL>, so keep all
-
+        
+        ## UPD 12 MAY - ADD SILENCE TOKEN
+        # self.last_s_mask = ~text_key_mask       # we no longer prepend <SIL>, so keep all
+        # exclude the first column (<sil>) from guided-attention statistics
+        valid = ~text_key_mask.clone()
+        if valid.size(1):            # guard against empty seq
+            valid[:, 0] = False      # <sil> column
+        self.last_s_mask = valid
+        ## UPD 12 MAY - ADD SILENCE TOKEN
 
         
         text_metrics.update(attn_info)
