@@ -57,12 +57,21 @@ from .mdn import MixtureDensityNetworkLoss
 # from .universe import Universe
 
 
-## 11 May - updated ver (cross-attn only on Mel + FILM on latent)
+# ## 11 May - updated ver (cross-attn only on Mel + FILM on latent)
+# # from .condition_11May2 import ConditionerNetwork # second try to fix SIL masking
+# from .condition_11May2m import ConditionerNetwork # second try to fix SIL masking
+# from .universe_gan_NS_11May import UniverseGAN  # upd guid_attn loss to add masking
+# from .textencoder_11May import TextEncoder
+# from .score import ScoreNetwork
+# ## 11 May - updated ver (cross-attn only on Mel + FILM on latent)
+
+
+## 12 May - updated ver
 # from .condition_11May2 import ConditionerNetwork # second try to fix SIL masking
-from .condition_11May2m import ConditionerNetwork # second try to fix SIL masking
-from .universe_gan_NS_11May import UniverseGAN  # upd guid_attn loss to add masking
+from .condition_12May import ConditionerNetwork # second try to fix SIL masking
+from .universe_gan_NS_12May import UniverseGAN  # upd guid_attn loss to add masking
 from .textencoder_11May import TextEncoder
 from .score import ScoreNetwork
-## 11 May - updated ver (cross-attn only on Mel + FILM on latent)
+## 12 May - updated ver
 
 
