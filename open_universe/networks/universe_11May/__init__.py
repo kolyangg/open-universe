@@ -57,13 +57,13 @@ from .mdn import MixtureDensityNetworkLoss
 # from .universe import Universe
 
 
-# ## 11 May - updated ver (cross-attn only on Mel + FILM on latent)
-# # from .condition_11May2 import ConditionerNetwork # second try to fix SIL masking
-# from .condition_11May2m import ConditionerNetwork # second try to fix SIL masking
-# from .universe_gan_NS_11May import UniverseGAN  # upd guid_attn loss to add masking
-# from .textencoder_11May import TextEncoder
-# from .score import ScoreNetwork
-# ## 11 May - updated ver (cross-attn only on Mel + FILM on latent)
+## 11 May - updated ver (cross-attn only on Mel + FILM on latent)
+# from .condition_11May2 import ConditionerNetwork # second try to fix SIL masking
+from .condition_11May2m import ConditionerNetwork # second try to fix SIL masking
+from .universe_gan_NS_11May import UniverseGAN  # upd guid_attn loss to add masking
+from .textencoder_11May import TextEncoder
+from .score import ScoreNetwork
+## 11 May - updated ver (cross-attn only on Mel + FILM on latent)
 
 
 # ## 12 May - 11May ver + adding SIL token and not masking spaces
@@ -74,12 +74,12 @@ from .mdn import MixtureDensityNetworkLoss
 # ## 12 May - 11May ver + adding SIL token and not masking spaces
 
 
-## 13 May - 11May_m + WavLM (with add loss)
-from .condition_11May2m_wv import ConditionerNetwork # second try to fix SIL masking
-from .universe_gan_NS_11May import UniverseGAN  # upd guid_attn loss to add masking
-from .textencoder_11May_silsp import TextEncoder
-from .score import ScoreNetwork
-## 13 May - 11May_m + WavLM (with add loss)
+# ## 13 May - 11May_m + WavLM (with add loss)
+# from .condition_11May2m_wv import ConditionerNetwork # second try to fix SIL masking
+# from .universe_gan_NS_11May import UniverseGAN  # upd guid_attn loss to add masking
+# from .textencoder_11May_silsp import TextEncoder
+# from .score import ScoreNetwork
+# ## 13 May - 11May_m + WavLM (with add loss)
 
 
 
