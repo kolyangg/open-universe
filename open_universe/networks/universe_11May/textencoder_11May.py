@@ -194,6 +194,40 @@ class TextEncoder(nn.Module):
 
         print(f"[DEBUG] Final phoneme_ids shape: {phoneme_ids.shape}")
         return phoneme_ids, mask
+    
+    ###### FOR TESTING ONLY #####
+    def get_phonemes(self, sents: list[str]):
+        batched: list[torch.LongTensor] = []
+        max_len = 0
+
+        print(f"[DEBUG] Original sentences: {sents}")
+        
+        all_phonemes = []
+
+        for sent in sents:
+            # Empty sentence guard --------------------------------------------------
+            if not sent or not sent.strip():
+                ids = torch.LongTensor([0])  # placeholder pad token
+                batched.append(ids)
+                max_len = max(max_len, 1)
+                print("[DEBUG] Empty string detected, using placeholder token ID: [0]")
+                continue
+
+            # Phonemize (cached) ----------------------------------------------------
+            phonemes = self.phoneme_cache.get(sent)
+            if phonemes is None:
+                try:
+                    phonemes = self.phonemizer(sent)
+                except Exception as e:  # fall back to raw text
+                    warnings.warn(f"Phonemizer failed on '{sent}': {e}")
+                    phonemes = sent
+                self.phoneme_cache[sent] = phonemes
+                
+            all_phonemes.append(phonemes)
+            
+        return all_phonemes
+    ###### FOR TESTING ONLY #####
+
 
     # ───────────────────────────────────────────────────────────────────────────────
     # Forward pass
