@@ -58,6 +58,7 @@ datasets:
     fs: 16000
     win_len_sec: 4.0 # 2.0      # <- keep same len; no word-cut randomness
     part_used: 1.0 # 1.0
+    max_len_sec: 4.0 ## ADD 13 MAY - TRY USING only max 4 sec clips for val
 
   vb-test-16k:
     _target_: open_universe.dataset_aligned_old.NoisyDataset
