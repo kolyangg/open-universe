@@ -208,8 +208,8 @@ class TextEncoder(nn.Module):
         tg_list = tg_list or [None] * len(sentences)
         for s, tg in zip(sentences, tg_list):
             # phon_str = self.t2p.infer_sentence(self._basic_clean(s))
-           
-           # ── new: protect Text2PhonemeSequence from empty strings ──────────
+            cleaned = self._basic_clean(s)
+            # ── new: protect Text2PhonemeSequence from empty strings ──────────
             if cleaned == "":
                 # Treat it as “silence”: a single space → one phoneme “▁”
                 phon_str = "▁"
