@@ -607,6 +607,13 @@ class UniverseGAN(Universe):
                     pred_pos = attn_map.argmax(dim=1).float()  # [B,S]
                     
                     losses_align = []
+                    
+                    ### TO FIX MULTI-GPU ISSUE ###
+                    local_B = pred_pos.size(0)
+                    global_offset = self.module_offset if hasattr(self, "module_offset") else 0
+                    coords_b = coords_b[global_offset : global_offset + local_B]
+                    ### TO FIX MULTI-GPU ISSUE ###
+
 
                     for b, (coords, pred) in enumerate(zip(coords_b, pred_pos)):
                         # skip if no spans or all zeros

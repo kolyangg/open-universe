@@ -5,7 +5,7 @@ tar -czvf textgr/textgrids.tar.gz data/voicebank_demand/textgrids_ipa
 python3 models/universe/rsync/upload_to_cloud.py textgr dropbox:/speech_enh_backups
 
 ## downl
-python3 models/universe/rsync/download_from_cloud.py dropbox:/speech_enh_backups/textgr
+python3 models/universe/rsync/download_from_cloud.py dropbox:/speech_enh_backups/speech_enh/textgr
 
 
 ## unzip
