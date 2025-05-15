@@ -1,0 +1,15 @@
+## zip
+tar -czvf textgr/textgrids.tar.gz data/voicebank_demand/textgrids_ipa
+
+## upl
+python3 models/universe/rsync/upload_to_cloud.py textgr dropbox:/speech_enh_backups
+
+## downl
+python3 models/universe/rsync/download_from_cloud.py dropbox:/speech_enh_backups/textgr
+
+
+## unzip
+mkdir data/voicebank_demand/textgrids_ipa
+tar -xzvf exp/speech_enh/textgr/textgrids.tar.gz -C data/voicebank_demand/textgrids_ipa
+
+

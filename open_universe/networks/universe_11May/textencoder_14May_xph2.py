@@ -9,6 +9,8 @@ import torch
 import torch.nn as nn
 from transformers import AutoModel, AutoTokenizer
 
+from text2phonemesequence import Text2PhonemeSequence   # NEW
+
 __all__ = ["TextEncoder"]
 
 
@@ -27,7 +29,8 @@ class TextEncoder(nn.Module):
     def __init__(self,
                  hidden_dim: int,
                  seq_dim: int | None = None,
-                 freeze_backbone: bool = True):
+                 freeze_backbone: bool = True,
+                 language: str = "eng-us"):
         super().__init__()
         self.freeze_backbone = freeze_backbone
 
@@ -59,6 +62,15 @@ class TextEncoder(nn.Module):
         self.cls_id = self.tokenizer.cls_token_id
         self.sep_id = self.tokenizer.sep_token_id
         self.pad_id = self.tokenizer.pad_token_id
+        
+        
+        
+        # ── phoneme converter ────────────────────────────────────────────────
+        # Runs on GPU automatically if backbone is moved there
+        self.t2p = Text2PhonemeSequence(
+            language=language,
+            is_cuda=torch.cuda.is_available()
+        )   
 
     # ───────────────────────────────────────────────────────────────────────────
     # helpers
@@ -80,7 +92,11 @@ class TextEncoder(nn.Module):
         if not sentences:
             raise ValueError("input list is empty")
 
-        inputs = [self._basic_clean(s) for s in sentences]
+        # inputs = [self._basic_clean(s) for s in sentences]
+        
+        # Convert raw text → phoneme sequence (space-separated)
+        inputs = [self.t2p.infer_sentence(self._basic_clean(s))
+                  for s in sentences]                      # NEW / REPLACES OLD
 
         enc = self.tokenizer(
             inputs,
@@ -134,9 +150,32 @@ class TextEncoder(nn.Module):
         return global_emb, seq_emb, key_mask
 
 
-# ─── simple test run ──────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
+# debug / smoke-test
+# ──────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    enc = TextEncoder(hidden_dim=256).eval()
-    sample = ["P L IY1 Z K AO1 L S T EH1 L AH0"]
-    g, s, m = enc(sample)
-    print("global :", g.shape, "seq :", s.shape, "mask :", m.shape)
+    sample = [
+        "This is a test sentence .",
+        "Another example to verify the pipeline !",
+    ]
+
+    encoder = TextEncoder(hidden_dim=256, freeze_backbone=True).eval()
+
+    with torch.no_grad():
+        for sent in sample:
+            cleaned   = encoder._basic_clean(sent)
+            phonemes  = encoder.t2p.infer_sentence(cleaned)
+            ids       = encoder.tokenizer(phonemes,
+                                          add_special_tokens=True)["input_ids"]
+            tokens    = encoder.tokenizer.convert_ids_to_tokens(ids)
+
+            print("-" * 60)
+            print("SOURCE   :", sent)
+            print("PHONEMES :", phonemes)
+            print("IDS      :", ids)
+            print("TOKENS   :", tokens)
+
+        # run a forward pass to ensure nothing breaks
+        encoder(sample)
+        print("-" * 60)
+        print("Forward pass OK ✔")

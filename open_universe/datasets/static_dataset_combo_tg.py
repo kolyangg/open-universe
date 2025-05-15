@@ -16,6 +16,8 @@ from typing import Optional, Tuple, Union
 import torch, torchaudio
 from hydra.utils import to_absolute_path
 
+import tgt # NEW 15 MAY
+
 log = logging.getLogger(__name__)
 
 
@@ -33,6 +35,7 @@ class NoisyDataset(torch.utils.data.Dataset):
         noisy_folder: str   = "noisy",
         clean_folder: str   = "clean",
         text_path:    str | None = None,
+        textgrid_path: str | None = None,    # NEW 15 MAY
         part_used:    float = 1.0,
     ):
         super().__init__()
@@ -69,6 +72,8 @@ class NoisyDataset(torch.utils.data.Dataset):
                 self.lengths.append(n)
 
         self.text_path = Path(to_absolute_path(text_path)) if text_path else None
+        self.tg_path   = Path(to_absolute_path(textgrid_path)) if textgrid_path else None  # NEW 15 MAY
+        
         log.info(
             f"[{split}] {len(self.file_list)} files (≤ {max_len_sec}s) "
             f"fixed_len={fixed_len_sec}"
@@ -85,7 +90,8 @@ class NoisyDataset(torch.utils.data.Dataset):
         return wav
 
     # ------------------------------------------------------------------ #
-    def __getitem__(self, idx) -> Tuple[torch.Tensor, torch.Tensor, str, torch.Tensor]:
+    # def __getitem__(self, idx) -> Tuple[torch.Tensor, torch.Tensor, str, torch.Tensor]:
+    def __getitem__(self, idx) -> Tuple[torch.Tensor, torch.Tensor, str, torch.Tensor, object]:  # NEW 15 MAY (add tg)
         fn = self.file_list[idx]
         noisy = self._load(self.noisy_path / fn)
         clean = (
@@ -99,6 +105,12 @@ class NoisyDataset(torch.utils.data.Dataset):
             txt = p.read_text().strip()
         else:
             txt = ""
+            
+        # ---------------- TextGrid ---------------- ## NEW 15 MAY
+        if self.tg_path and (g := self.tg_path / f"{Path(fn).stem}.TextGrid").exists():
+            tg = tgt.read_textgrid(str(g))
+        else:
+            tg = None
 
         T = noisy.shape[-1]
         if self.split == "train" and self.fixed_len:
@@ -112,4 +124,5 @@ class NoisyDataset(torch.utils.data.Dataset):
         else:                               # val / test
             mask = torch.ones(T)
 
-        return noisy, clean, txt, mask
+        # return noisy, clean, txt, mask
+        return noisy, clean, txt, mask, tg      # NEW 15 MAY (add tg)

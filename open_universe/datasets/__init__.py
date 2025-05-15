@@ -46,17 +46,20 @@ Author: Robin Scheibler (@fakufaku)
 # from .m_static_dataset_NS_4sec_pad2 import NoisyDataset
 
 
-# 19 Apr: Combined version of all three options
-
-from .datamodule_combo import DataModule
-from .static_dataset_combo import NoisyDataset
-
+# # 19 Apr: Combined version of all three options
+# from .datamodule_combo import DataModule
+# from .static_dataset_combo import NoisyDataset
 
 
-# 06 May: add random bucket option to DataModule for more variability
 
-from .datamodule_combo2 import DataModule
-from .static_dataset_combo import NoisyDataset
+# # 06 May: add random bucket option to DataModule for more variability
+# from .datamodule_combo2 import DataModule
+# from .static_dataset_combo import NoisyDataset
+
+
+# 15 May: add tg
+from .datamodule_combo2_tg import DataModule
+from .static_dataset_combo_tg import NoisyDataset
 
 
 # 27 Apr: Combined version + strfix
