@@ -207,7 +207,22 @@ class TextEncoder(nn.Module):
         inputs, aligned_all, inp_lens = [], [], []      # NEW
         tg_list = tg_list or [None] * len(sentences)
         for s, tg in zip(sentences, tg_list):
-            phon_str = self.t2p.infer_sentence(self._basic_clean(s))
+            # phon_str = self.t2p.infer_sentence(self._basic_clean(s))
+           
+           # ── new: protect Text2PhonemeSequence from empty strings ──────────
+            if cleaned == "":
+                # Treat it as “silence”: a single space → one phoneme “▁”
+                phon_str = "▁"
+                print(f"[DEBUG] '{s}' became empty after cleaning → "
+                    f"using placeholder phoneme '▁'")
+            else:
+                try:
+                    phon_str = self.t2p.infer_sentence(cleaned)
+                except Exception as e:
+                    # fall back gracefully instead of crashing the whole batch
+                    print(f"[WARN] Text-to-phoneme failed for '{s}': {e}")
+                    phon_str = "▁"
+        
             inputs.append(phon_str)
             inp_lens.append(len(phon_str.split()))      # NEW
             if tg is not None:
