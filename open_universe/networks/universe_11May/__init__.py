@@ -83,13 +83,21 @@ from .mdn import MixtureDensityNetworkLoss
 
 
 
-## 14 May - try 11May_m + xphonebert for text encoder
-# from .condition_11May2 import ConditionerNetwork # second try to fix SIL masking
-from .condition_11May2m import ConditionerNetwork # second try to fix SIL masking
+# ## 14 May - try 11May_m + xphonebert for text encoder
+# # from .condition_11May2 import ConditionerNetwork # second try to fix SIL masking
+# from .condition_11May2m import ConditionerNetwork # second try to fix SIL masking
+# from .universe_gan_NS_11May import UniverseGAN  # upd guid_attn loss to add masking
+# from .textencoder_14May_xph import TextEncoder
+# from .score import ScoreNetwork
+# ## 14 May - try 11May_m + xphonebert for text encoder
+
+
+## 15 May - 11May_m + WavLM (with add loss) + upd WavLMAdapter
+from .condition_11May2m_wv2 import ConditionerNetwork # second try to fix SIL masking
 from .universe_gan_NS_11May import UniverseGAN  # upd guid_attn loss to add masking
-from .textencoder_14May_xph import TextEncoder
+from .textencoder_11May_silsp import TextEncoder
 from .score import ScoreNetwork
-## 14 May - try 11May_m + xphonebert for text encoder
+## 15 May - 11May_m + WavLM (with add loss) + upd WavLMAdapter
 
 
 
