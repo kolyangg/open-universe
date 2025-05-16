@@ -100,12 +100,13 @@ from .mdn import MixtureDensityNetworkLoss
 # ## 15 May - 11May_m + WavLM (without WVLM loss) + upd WavLMAdapter
 
 
-# ## 15 May - 11May + MFA loss
-# from .condition_11May2_silsp_tg import ConditionerNetwork # second try to fix SIL masking
-# from .universe_gan_NS_11May_tg import UniverseGAN  # upd guid_attn loss to add masking
+## 15 May - 11May + MFA loss
+from .condition_11May2_silsp_tg import ConditionerNetwork # second try to fix SIL masking
+from .universe_gan_NS_11May_tg import UniverseGAN  # upd guid_attn loss to add masking
 # from .textencoder_14May_xph2_tg import TextEncoder
-# from .score import ScoreNetwork
-# ## 15 May - 11May + MFA loss
+from .textencoder_14May_xph2_tg2 import TextEncoder
+from .score import ScoreNetwork
+## 15 May - 11May + MFA loss
 
 
 # ## 16 May - 11May_m + WavLM (with WVLM loss) + upd WavLMAdapter
@@ -116,12 +117,12 @@ from .mdn import MixtureDensityNetworkLoss
 # ## 16 May - 11May_m + WavLM (with WVLM loss) + upd WavLMAdapter
 
 
-## 16 May - 11May (ful_film_sp) + XPhoneBERT
-from .condition_11May2_silsp import ConditionerNetwork # second try to fix SIL masking
-from .universe_gan_NS_11May import UniverseGAN  # upd guid_attn loss to add masking
-from .textencoder_14May_xph2 import TextEncoder
-from .score import ScoreNetwork
-## 16 May - 11May (ful_film_sp) + XPhoneBERT
+# ## 16 May - 11May (ful_film_sp) + XPhoneBERT
+# from .condition_11May2_silsp import ConditionerNetwork # second try to fix SIL masking
+# from .universe_gan_NS_11May import UniverseGAN  # upd guid_attn loss to add masking
+# from .textencoder_14May_xph2 import TextEncoder
+# from .score import ScoreNetwork
+# ## 16 May - 11May (ful_film_sp) + XPhoneBERT
 
 
 # ## 16 May - 11May (ful_film_sp) + XPhoneBERT + WavLM (with WVLM loss)
