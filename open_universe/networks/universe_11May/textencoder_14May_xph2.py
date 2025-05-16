@@ -65,12 +65,21 @@ class TextEncoder(nn.Module):
         
         
         
+        # # ── phoneme converter ────────────────────────────────────────────────
+        # # Runs on GPU automatically if backbone is moved there
+        # self.t2p = Text2PhonemeSequence(
+        #     language=language,
+        #     is_cuda=torch.cuda.is_available()
+        # )   
+        
         # ── phoneme converter ────────────────────────────────────────────────
         # Runs on GPU automatically if backbone is moved there
         self.t2p = Text2PhonemeSequence(
             language=language,
-            is_cuda=torch.cuda.is_available()
+            # is_cuda=torch.cuda.is_available(),
+            is_cuda=False # easier to keep it on CPU
         )   
+
 
     # ───────────────────────────────────────────────────────────────────────────
     # helpers
