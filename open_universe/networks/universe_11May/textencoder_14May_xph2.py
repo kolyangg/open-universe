@@ -65,20 +65,56 @@ class TextEncoder(nn.Module):
         
         
         
-        # # ── phoneme converter ────────────────────────────────────────────────
+        # # # ── phoneme converter ────────────────────────────────────────────────
         # # Runs on GPU automatically if backbone is moved there
         # self.t2p = Text2PhonemeSequence(
         #     language=language,
         #     is_cuda=torch.cuda.is_available()
         # )   
         
-        # ── phoneme converter ────────────────────────────────────────────────
-        # Runs on GPU automatically if backbone is moved there
-        self.t2p = Text2PhonemeSequence(
-            language=language,
-            # is_cuda=torch.cuda.is_available(),
-            is_cuda=False # easier to keep it on CPU
-        )   
+        # # ── phoneme converter ────────────────────────────────────────────────
+        # # Runs on GPU automatically if backbone is moved there
+        # self.t2p = Text2PhonemeSequence(
+        #     language=language,
+        #     # is_cuda=torch.cuda.is_available(),
+        #     is_cuda=False # easier to keep it on CPU
+        # )   
+        
+        # ── phoneme converter (lazy - one per device) ───────────────────────
+        self.language   = language
+        self._t2p_cache: dict[str, Text2PhonemeSequence] = {}
+        
+    
+    # --------------------------------------------------------------------- #
+    # Build / fetch Text2PhonemeSequence that lives on *device*             #
+    # --------------------------------------------------------------------- #
+    def _get_t2p_on(self, device: torch.device) -> "Text2PhonemeSequence":
+        key = str(device)
+        # if key not in self._t2p_cache:
+        #     use_cuda = device.type == "cuda"
+        #     t2p = Text2PhonemeSequence(language=self.language, is_cuda=use_cuda)
+        #     if use_cuda:
+        #         t2p = t2p.to(device)
+        #     self._t2p_cache[key] = t2p
+        
+        if key not in self._t2p_cache:
+            if device.type == "cuda":
+                # Build the phonemiser *while* the correct GPU is current.
+                # Text2PhonemeSequence has no .to(), so we create one per card.
+                with torch.cuda.device(device):
+                    t2p = Text2PhonemeSequence(
+                        language=self.language,
+                        is_cuda=True,
+                    )
+            else:  # CPU
+                t2p = Text2PhonemeSequence(
+                    language=self.language,
+                    is_cuda=False,
+                )
+            self._t2p_cache[key] = t2p
+                
+        
+        return self._t2p_cache[key]
 
 
     # ───────────────────────────────────────────────────────────────────────────
@@ -104,8 +140,20 @@ class TextEncoder(nn.Module):
         # inputs = [self._basic_clean(s) for s in sentences]
         
         # Convert raw text → phoneme sequence (space-separated)
-        inputs = [self.t2p.infer_sentence(self._basic_clean(s))
-                  for s in sentences]                      # NEW / REPLACES OLD
+        # inputs = [self.t2p.infer_sentence(self._basic_clean(s))
+        #           for s in sentences]                      # NEW / REPLACES OLD
+    
+        device = next(self.parameters()).device
+        t2p    = self._get_t2p_on(device)
+
+        inputs = []
+        for s in sentences:
+            cleaned = self._basic_clean(s)
+            if cleaned == "":               # silence placeholder
+                inputs.append("▁")
+            else:
+                inputs.append(t2p.infer_sentence(cleaned))
+
 
         enc = self.tokenizer(
             inputs,
@@ -116,7 +164,7 @@ class TextEncoder(nn.Module):
 
         input_ids      = enc["input_ids"]
         attention_mask = enc["attention_mask"]
-        device         = next(self.parameters()).device
+        # device         = next(self.parameters()).device
         input_ids      = input_ids.to(device)
         attention_mask = attention_mask.to(device)
         
