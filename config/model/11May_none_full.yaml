@@ -70,7 +70,7 @@ losses:
     mel_l1: 45.0 #  60.0 # increased from 45.0 for stronger reconstruction
     score: 1.0
     # guided_attn: 10.0   # NEW 04 May: try 5–20; 0 disables GA loss
-    guided_attn: 0.05   # 11 May - upd to 0.05 from 0.00
+    guided_attn: 0.25   # 11 May - upd to 0.05 from 0.00
     # coverage: 0.1
     coverage: 0.1 ## 11 May - add it again
     ga_anneal_steps: 30000

@@ -22,3 +22,5 @@ Author: Robin Scheibler (@fakufaku)
 
 from .model_loader import load_model
 from .signature_to_parser import add_enhance_arguments
+
+__all__ = ["load_model", "add_enhance_arguments"]

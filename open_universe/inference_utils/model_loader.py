@@ -37,10 +37,13 @@ def ckpt_to_config_path(ckpt_path):
     ckpt_path = Path(ckpt_path)
     config_path_1 = ckpt_path.parent / "config.yaml"
     config_path_2 = ckpt_path.parents[1] / ".hydra/config.yaml"
+    config_path_3 = ckpt_path.parents[3] / ".hydra/config.yaml"
     if config_path_1.exists():
         config_path = config_path_1
     elif config_path_2.exists():
         config_path = config_path_2
+    elif config_path_3.exists():
+        config_path = config_path_3
     else:
         raise ValueError(
             f"Could not find the configuration file for model {ckpt_path}."
