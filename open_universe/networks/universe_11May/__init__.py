@@ -125,13 +125,20 @@ from .mdn import MixtureDensityNetworkLoss
 # ## 16 May - 11May (ful_film_sp) + XPhoneBERT
 
 
-## 16 May - 11May (ful_film_sp) + XPhoneBERT + WavLM (with WVLM loss)
-from .condition_11May2_silsp_wv import ConditionerNetwork # second try to fix SIL masking
-from .universe_gan_NS_11May_wvloss import UniverseGAN  # upd guid_attn loss to add masking
-from .textencoder_14May_xph2 import TextEncoder
-from .score import ScoreNetwork
-## 16 May - 11May (ful_film_sp) + XPhoneBERT + WavLM (with WVLM loss)
+# ## 16 May - 11May (ful_film_sp) + XPhoneBERT + WavLM (with WVLM loss)
+# from .condition_11May2_silsp_wv import ConditionerNetwork # second try to fix SIL masking
+# from .universe_gan_NS_11May_wvloss import UniverseGAN  # upd guid_attn loss to add masking
+# from .textencoder_14May_xph2 import TextEncoder
+# from .score import ScoreNetwork
+# ## 16 May - 11May (ful_film_sp) + XPhoneBERT + WavLM (with WVLM loss)
 
+
+## 19 May - 11May_m + WavLM DOUBLE (with WVLM loss) + upd WavLMAdapter (based on 16 May wv+full_film_m2_wvloss)
+from .condition_11May2m_wv2_double import ConditionerNetwork
+from .universe_gan_NS_11May_wvloss import UniverseGAN  # Now using wavlm-large embds for loss function (but using wavlm-base-plus-sv model) - TBC
+from .textencoder_11May_silsp import TextEncoder
+from .score import ScoreNetwork
+## 19 May - 11May_m + WavLM DOUBLE (with WVLM loss) + upd WavLMAdapter (based on 16 May wv+full_film_m2_wvloss)
 
 
 # ## 12 May - updated ver
