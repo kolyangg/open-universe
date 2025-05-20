@@ -15,6 +15,13 @@ from pathlib import Path
 from typing import Optional, Tuple, Union
 import torch, torchaudio
 from hydra.utils import to_absolute_path
+import time
+
+# optional progress bar
+try:
+    from tqdm import tqdm
+except ImportError:   # tqdm not installed → dummy
+    tqdm = None
 
 log = logging.getLogger(__name__)
 
@@ -95,6 +102,10 @@ class NoisyDataset(torch.utils.data.Dataset):
         else:
             from multiprocessing.pool import ThreadPool
 
+            n_threads = min(32, os.cpu_count() or 1)
+            log.info(f"[{split}] scanning {len(files)} files "
+                     f"with {n_threads} threads …")
+
             def probe(f):
                 n = torchaudio.info(str(self.noisy_path / f)).num_frames
                 if n > self.max_len:
@@ -105,13 +116,30 @@ class NoisyDataset(torch.utils.data.Dataset):
                         return None
                 return f, n
 
+            # self.file_list, self.lengths = [], []
+            # with ThreadPool(16) as pool:                       # <<< adjust threads
+            #     for out in pool.imap_unordered(probe, files):
+            #         if out is not None:
+            #             f, n = out
+            #             self.file_list.append(f)
+            #             self.lengths.append(n)
+            
+            
             self.file_list, self.lengths = [], []
-            with ThreadPool(16) as pool:                       # <<< adjust threads
+
+            bar = tqdm(total=len(files), unit="file",
+                       desc=f"{split} scan") if tqdm else None
+            t0  = time.time()
+            with ThreadPool(n_threads) as pool:
                 for out in pool.imap_unordered(probe, files):
                     if out is not None:
                         f, n = out
                         self.file_list.append(f)
                         self.lengths.append(n)
+                    if bar: bar.update()
+            if bar: bar.close()
+
+            log.info(f"[{split}] scanned in {time.time()-t0:.1f}s")
 
             torch.save((self.file_list, self.lengths), manifest)
             log.info(f"[{split}] wrote manifest {manifest}")    
