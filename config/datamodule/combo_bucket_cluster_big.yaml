@@ -32,12 +32,12 @@ val:
         shuffle: false
         batch_size: 1 # 1 # 8 # 4 # 1
 # test:
-#     dataset: vb-test-16k
-#     dl_opts:
-#         pin_memory: true
-#         num_workers: 4
-#         shuffle: false
-#         batch_size: 1
+    dataset: vb-test-16k
+    dl_opts:
+        pin_memory: true
+        num_workers: 4
+        shuffle: false
+        batch_size: 1
 
 datasets:
     vb-train-16k:
@@ -62,12 +62,12 @@ datasets:
         audio_len: 4.0 # UPDATE: 4 seconds here too
         part_used: 1.0 # 0.1 # 1.0  # Use 20% of validation data for faster validation
 
-    # vb-test-16k:
-    #     _target_: open_universe.datasets.NoisyDataset
-    #     audio_path: ${..vb-train-16k.audio_path}
-    #     text_path: ${..vb-train-16k.text_path}  # Re-use the same text_path
-    #     fs: ${..vb-train-16k.fs}
-    #     split: test
-    #     # max clip length kept in **all** modes
-    #     audio_len: 4.0 # UPDATE: 4 seconds here too
-    #     part_used: 1.0  # Use full test set for final evaluation
+    vb-test-16k: ## SAME AS VAL WITH 0.001 samples
+        _target_: open_universe.datasets.NoisyDataset
+        audio_path: ../urgent2024_challenge/
+        text_path: ../urgent2024_challenge/sim_val_16k/text
+        fs: ${..vb-train-16k.fs}
+        split: sim_val_16k
+        # max clip length kept in **all** modes
+        audio_len: 4.0 # UPDATE: 4 seconds here too
+        part_used: 0.0001 # Use full test set for final evaluation
