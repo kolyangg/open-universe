@@ -99,6 +99,7 @@ class NoisyDataset(torch.utils.data.Dataset):
         if manifest.exists():
             self.file_list, self.lengths = torch.load(manifest)
             log.info(f"[{split}] loaded manifest → {len(self.file_list)} samples")
+            print(f"[{split}] loaded manifest → {len(self.file_list)} samples")
         else:
             from multiprocessing.pool import ThreadPool
 
