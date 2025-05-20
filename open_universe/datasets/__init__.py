@@ -52,9 +52,13 @@ Author: Robin Scheibler (@fakufaku)
 
 
 
-# 06 May: add random bucket option to DataModule for more variability - DEFAULT VERSION
+# # 06 May: add random bucket option to DataModule for more variability - DEFAULT VERSION
+# from .datamodule_combo2 import DataModule
+# from .static_dataset_combo import NoisyDataset
+
+# 19 May: upd for large dataset (ignore no text samples)
 from .datamodule_combo2 import DataModule
-from .static_dataset_combo import NoisyDataset
+from .static_dataset_combo2 import NoisyDataset
 
 
 # # 15 May: add tg
