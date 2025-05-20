@@ -105,6 +105,8 @@ class NoisyDataset(torch.utils.data.Dataset):
             n_threads = min(32, os.cpu_count() or 1)
             log.info(f"[{split}] scanning {len(files)} files "
                      f"with {n_threads} threads …")
+            print(f"[{split}] scanning {len(files)} files "
+                  f"with {n_threads} threads …")
 
             def probe(f):
                 n = torchaudio.info(str(self.noisy_path / f)).num_frames
@@ -130,6 +132,7 @@ class NoisyDataset(torch.utils.data.Dataset):
             bar = tqdm(total=len(files), unit="file",
                        desc=f"{split} scan") if tqdm else None
             t0  = time.time()
+            print(f"starting scan")
             with ThreadPool(n_threads) as pool:
                 for out in pool.imap_unordered(probe, files):
                     if out is not None:
