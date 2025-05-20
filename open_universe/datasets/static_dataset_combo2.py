@@ -79,19 +79,19 @@ class NoisyDataset(torch.utils.data.Dataset):
         print(f"skip_no_text: {skip_no_text}")
         
         # length filter  (+ optional skip_no_text)
-        self.file_list, self.lengths = [], []
-        for f in files:
-            n = torchaudio.info(str(self.noisy_path / f)).num_frames
-            if n > self.max_len:
-                continue
+        # self.file_list, self.lengths = [], []
+        # for f in files:
+        #     n = torchaudio.info(str(self.noisy_path / f)).num_frames
+        #     if n > self.max_len:
+        #         continue
 
-            if skip_no_text and text_path:
-                txt_file = Path(to_absolute_path(text_path)) / f"{Path(f).stem}.txt"
-                if not txt_file.exists() or txt_file.read_text().strip() == "<not-available>":
-                    continue
+        #     if skip_no_text and text_path:
+        #         txt_file = Path(to_absolute_path(text_path)) / f"{Path(f).stem}.txt"
+        #         if not txt_file.exists() or txt_file.read_text().strip() == "<not-available>":
+        #             continue
 
-            self.file_list.append(f)
-            self.lengths.append(n)
+        #     self.file_list.append(f)
+        #     self.lengths.append(n)
             
             
         # -------- manifest cache (speeds up large corpora) ------------ #
