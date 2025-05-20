@@ -85,6 +85,38 @@ class NoisyDataset(torch.utils.data.Dataset):
 
             self.file_list.append(f)
             self.lengths.append(n)
+            
+            
+        # -------- manifest cache (speeds up large corpora) ------------ #
+        manifest = self.noisy_path.parent / f"{split}_manifest.pkl"
+        if manifest.exists():
+            self.file_list, self.lengths = torch.load(manifest)
+            log.info(f"[{split}] loaded manifest → {len(self.file_list)} samples")
+        else:
+            from multiprocessing.pool import ThreadPool
+
+            def probe(f):
+                n = torchaudio.info(str(self.noisy_path / f)).num_frames
+                if n > self.max_len:
+                    return None
+                if skip_no_text and text_path:
+                    txt = Path(to_absolute_path(text_path)) / f"{Path(f).stem}.txt"
+                    if (not txt.exists()) or txt.read_text().strip() == "<not-available>":
+                        return None
+                return f, n
+
+            self.file_list, self.lengths = [], []
+            with ThreadPool(16) as pool:                       # <<< adjust threads
+                for out in pool.imap_unordered(probe, files):
+                    if out is not None:
+                        f, n = out
+                        self.file_list.append(f)
+                        self.lengths.append(n)
+
+            torch.save((self.file_list, self.lengths), manifest)
+            log.info(f"[{split}] wrote manifest {manifest}")    
+            print(f"[{split}] wrote manifest {manifest}")    
+            
         
 
         self.text_path = Path(to_absolute_path(text_path)) if text_path else None

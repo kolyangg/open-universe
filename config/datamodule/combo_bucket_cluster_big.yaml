@@ -44,8 +44,6 @@ datasets:
         _target_: open_universe.datasets.NoisyDataset
         audio_path: ../urgent2024_challenge/
         text_path: ../urgent2024_challenge/sim_train_16k/text
-        # audio_path: ../../data/voicebank_demand/16k
-        # text_path: ../../data/voicebank_demand/trainset_28spk_txt  # NEW: path to transcript files
         fs: 16000
         split: sim_train_16k
         # max clip length kept in **all** modes
