@@ -50,12 +50,22 @@ datasets:
         audio_len: 4.0 
         part_used: 1.0 # 0.1 # 1.0 # 0.01  # Use only 5% of data
 
-    vb-val-16k: # NORMAL
+    # vb-val-16k: # BIG VAL
+    #     _target_: open_universe.datasets.NoisyDataset
+    #     audio_path: ../urgent2024_challenge/
+    #     text_path: data/voicebank_demand/trainset_28spk_txt
+    #     fs: ${..vb-train-16k.fs}
+    #     split: sim_val_16k
+    #     # max clip length kept in **all** modes
+    #     audio_len: 4.0 # UPDATE: 4 seconds here too
+    #     part_used: 1.0 # 0.1 # 1.0  # Use 20% of validation data for faster validation
+
+    vb-val-16k: # SAME VAL AS BEFORE
         _target_: open_universe.datasets.NoisyDataset
-        audio_path: ../urgent2024_challenge/
-        text_path: ../urgent2024_challenge/sim_val_16k/text
+        audio_path: data/voicebank_demand/16k
+        text_path: data/voicebank_demand/trainset_28spk_txt
         fs: ${..vb-train-16k.fs}
-        split: sim_val_16k
+        split: val
         # max clip length kept in **all** modes
         audio_len: 4.0 # UPDATE: 4 seconds here too
         part_used: 1.0 # 0.1 # 1.0  # Use 20% of validation data for faster validation
