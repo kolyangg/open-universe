@@ -31,7 +31,7 @@ val:
         num_workers: 4
         shuffle: false
         batch_size: 1 # 1 # 8 # 4 # 1
-# test:
+test:
     dataset: vb-test-16k
     dl_opts:
         pin_memory: true
