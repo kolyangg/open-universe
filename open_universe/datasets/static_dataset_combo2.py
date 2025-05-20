@@ -55,6 +55,7 @@ class NoisyDataset(torch.utils.data.Dataset):
         self.max_len   = int(max_len_sec  * fs)
         self.fs        = fs
         self.split     = split
+        self.min_len   = int(0.5 * fs)        # ← NEW  ▸ keep ≥ 0.5 s
 
         root = Path(to_absolute_path(str(audio_path))) / split
         self.noisy_path = root / noisy_folder
@@ -96,9 +97,17 @@ class NoisyDataset(torch.utils.data.Dataset):
             
         # -------- manifest cache (speeds up large corpora) ------------ #
         manifest = self.noisy_path.parent / f"{split}_manifest.pkl"
-        if manifest.exists():
+        # if manifest.exists():
+        #     self.file_list, self.lengths = torch.load(manifest)
+        #     log.info(f"[{split}] loaded manifest → {len(self.file_list)} samples")
+            
+        if manifest.exists():                                # ------- load cache
             self.file_list, self.lengths = torch.load(manifest)
-            log.info(f"[{split}] loaded manifest → {len(self.file_list)} samples")
+            # drop clips < 0.5 s in case manifest is older
+            keep = [i for i,l in enumerate(self.lengths) if l >= self.min_len]
+            self.file_list = [self.file_list[i] for i in keep]
+            self.lengths   = [self.lengths[i]   for i in keep]
+            log.info(f"[{split}] loaded manifest → {len(self.file_list)} samples")    
             print(f"[{split}] loaded manifest → {len(self.file_list)} samples")
         else:
             from multiprocessing.pool import ThreadPool
@@ -111,8 +120,8 @@ class NoisyDataset(torch.utils.data.Dataset):
 
             def probe(f):
                 n = torchaudio.info(str(self.noisy_path / f)).num_frames
-                if n > self.max_len:
-                    return None
+                if n > self.max_len or n < self.min_len:      # ← min-length test
+                     return None
                 if skip_no_text and text_path:
                     txt = Path(to_absolute_path(text_path)) / f"{Path(f).stem}.txt"
                     if (not txt.exists()) or txt.read_text().strip() == "<not-available>":
