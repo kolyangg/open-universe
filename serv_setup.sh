@@ -50,6 +50,24 @@ read -rp "Generate MFA TextGrids after data prep? [y/N]: " GEN_TG
 read -rsp "Weights & Biases API key (press Enter to skip): " WANDB_API_KEY
 echo
 
+
+### Install mamba solver if not already installed
+if ! command -v mamba &>/dev/null; then
+  echo "Installing mamba solver..."
+  if command -v conda &>/dev/null; then
+    conda install -n base -c conda-forge -y \
+        "mamba>=1.5.6" \
+        "libmambapy>=1.5.6,<2" \
+        "conda-libmamba-solver>=24.5,<25"
+  else
+    echo "Conda not found. Please install Miniconda/Anaconda first."
+    exit 1
+  fi
+else
+  echo "Mamba solver already installed."
+fi
+
+
 # ---------------------------------------------------------------------------
 # Clone Miipher only if the folder is not there yet
 # ---------------------------------------------------------------------------
